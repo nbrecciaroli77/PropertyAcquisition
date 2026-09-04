@@ -9,3 +9,10 @@ backend/.pytest_cache
 backend/.mypy_cache
 backend/.ruff_cache
 *.pyc
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
