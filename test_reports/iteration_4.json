@@ -1,0 +1,34 @@
+{
+  "summary": "One consolidated QA cycle for IDEA-010 Milestone 3 (property workspace, gates_v1 + scoring_v1, waivers, workflow, brief re-evaluation, tenancy) plus M2 regression. Backend: new pytest suite /app/backend/tests/test_m3_public.py (41 tests) run against the public ingress with cookie auth - 41/41 passed (fixture catalogue and all 7 verdicts, DEMO-003 fail with fit 87, unknown never 0/false, filters + all three sorts, compare 4/422/invalid-uuid, detail shape with source_label + freshness + components + input_hash, illegal transition 409 transition_not_allowed, stale_write 409, hard_failure_cannot_be_promoted with failing ['land_sqm'], waiver 201 keeps gate=fail and verdict=fail then allows promotion, waiver_not_applicable 422 on a passing gate, revoke, saved/notes/tasks with optimistic-concurrency 409, /today counts, /activity, dev loader idempotency (7 then 0), brief v2 with land_sqm.min 700 -> reevaluation_state completed and DEMO-001 flips to fail on brief_version_no 2, cross-tenant 404s on list/detail/compare/notes/stage/today, 401 unauthenticated). Frontend (Playwright, desktop 1440 + mobile 390): sign-in, Discover review queue (4 reviewing cards with gate chip, separate Market/You chips, raw guide as advertised, 'Unknown' land for DEMO-006, fit + coverage rings), filters all/pass/unknown/fail (1/3/0) with honest empty state + working Clear filter, search, sort=fit ordering, cards/list views, Pipeline 11 columns with DEMO-003 Rejected / DEMO-005 Shortlisted / DEMO-007 Archived, property detail (header notes, 9 fact rows with sources+freshness, notes create/edit, tasks create/toggle, workflow with only allowed transitions, activity updating, toggle-saved), Match tab via ?view=match with NO remount/skeleton, 7 gate rows with data-outcome, waiver recorded -> gate stays data-outcome=fail with 'Waived by you - gate unchanged' -> revoke, promotion refusal notice mentioning waiver, Saved (DEMO-005), Compare empty state + selection + table rows (land shows Unknown) + remove, Today metrics/attention links to ?view=match/journey health/what changed, property-not-found for a foreign uuid, no page-level horizontal overflow at 390px on any tested screen, and M2 regression (brief loads, publish via confirm dialog creates version 3 with re-evaluation completed and properties move to v3, sign-out, Google/Apple disabled). No critical or blocking defects found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/journeys/{jid}/brief/versions (seeded owner)", "issue": "Seeded brief version 1 is still reevaluation_state='queued' (v2 and v3 are 'completed'). The review expectation is that every version reads 'completed'; the seed creates v1 without running reevaluate_journey, so the brief history and the version header can read 're-evaluation queued' forever for v1. Freshly published versions are correct."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m3_public.py",
+    "/app/test_reports/pytest/m3_public.xml"
+  ],
+  "action_items": [
+    "Optional (minor): make the seed run re-evaluation for brief version 1 (or store 'completed') so no published version is permanently stuck at 'queued'."
+  ],
+  "critical_code_review_comments": [
+    "properties.py list_properties fetches every property and filters/sorts in Python; fine for 7 fixtures but buyer_state/verdict/saved/q should move into SQL before real intake volume (M4).",
+    "_summaries lazily evaluates missing MatchEvaluations inside a GET (current_evaluation writes rows), so a read endpoint can write; acceptable but worth a comment/limit so a large list request cannot fan out into N evaluate+INSERT round-trips on the pooler.",
+    "PipelinePage testids replace underscores with hyphens (pipeline-stage-inspection-considered) while the API state is inspection_considered - keep this documented for test authors."
+  ],
+  "updated_files": ["/app/backend/tests/test_m3_public.py"],
+  "success_rate": {"backend": "100% (41/41)", "frontend": "100% of exercised flows"},
+  "seed_data_creation": "Created one throwaway tenant qa-m3-*@m2tests.pa-prototype.com for the brief re-evaluation flow (auto-cleaned by tests/conftest.py session teardown). On the seeded owner journey: one note ('QA note edited') and one completed task ('QA task from playwright') remain on DEMO-003/DEMO-002 as activity evidence; brief version 3 was published as part of the requested M2 publish regression (payload identical to v2, re-evaluation completed). All waivers created were revoked; DEMO-003 is back in Rejected; saved flags restored (only DEMO-005 saved).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "owner@propertyacquisition-demo.com / Prototype2026pass and other@propertyacquisition-demo.com / Prototype2026pass (per /app/memory/test_credentials.md); no lockouts triggered.",
+  "context_for_next_testing_agent": "Run backend M3 with: cd /app/backend && python -m pytest tests/test_m3_public.py -p no:randomly -q (about 3m20s over the public ingress; no --timeout flag, pyproject pytest config is used). UI notes: the sign-in form lives on '/' (there is NO /sign-in route - it 404s); brief publish opens a ConfirmDialog so you must click [data-testid=\"confirm-dialog-confirm\"] after [data-testid=\"brief-publish\"] and fill the 'Reason for this version' field first; Discover only shows the 4 reviewing properties, so the 5th 'Compare full (4)' disabled state cannot be reproduced from Discover (backend 422 for >4 ids is covered instead); Discover filter/search results need ~3-4s waits or you read a stale render; [data-testid^=\"version-\"] also matches the version-history container (use LI/version-N).",
+  "rca_of_the_issue": "Not applicable - no failures reproduced. Two earlier apparent anomalies were investigated and are not defects: (1) discover-search '81a' returning nothing is correct because 81A Sample Street (DEMO-005) is Shortlisted and Discover is the Reviewing queue - '81c' correctly returns DEMO-006; (2) the apparent duplicate 'Version 3' row was my prefix selector matching the OL container version-history, the DOM has exactly 3 rows matching the API."
+}

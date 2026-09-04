@@ -13,7 +13,6 @@ const screens: [string, string][] = [
   ["/app/agents", "agents"],
   ["/app/sources", "sources"],
   ["/app/settings", "settings"],
-  ["/app/properties/demo-006", "property-detail"],
 ];
 
 const publicScreens: [string, string][] = [
@@ -67,6 +66,22 @@ test.describe("authenticated screens", () => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       // Supabase sits in another region, so first paint can trail the navigation by a second or two.
       await expect(page.locator("h1")).toHaveCount(1, { timeout: 45_000 });
+      await assertNoOverflow(page, testInfo.project.name);
+      if (testInfo.project.name !== "narrow") {
+        await page.screenshot({ path: `e2e/screenshots/${testInfo.project.name}/${name}.png`, fullPage: true });
+      }
+    });
+  }
+
+  for (const [suffix, name] of [["", "property-detail"], ["?view=match", "property-match"]] as const) {
+    test(`${name} renders without horizontal overflow and has one h1`, async ({ page }, testInfo) => {
+      await page.goto("/app/discover", { waitUntil: "domcontentloaded" });
+      const link = page.locator('[data-legacy-ref="DEMO-006"] a[data-testid^="property-card-link"]');
+      await link.waitFor({ timeout: 45_000 });
+      const href = await link.getAttribute("href");
+      await page.goto(`${href}${suffix}`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("property-header")).toBeVisible({ timeout: 45_000 });
+      await expect(page.locator("h1")).toHaveCount(1);
       await assertNoOverflow(page, testInfo.project.name);
       if (testInfo.project.name !== "narrow") {
         await page.screenshot({ path: `e2e/screenshots/${testInfo.project.name}/${name}.png`, fullPage: true });

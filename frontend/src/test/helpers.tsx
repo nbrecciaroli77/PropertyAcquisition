@@ -74,6 +74,20 @@ export const BRIEF: BriefResponse = {
 
 type Handler = { status?: number; body: unknown };
 
+export const TODAY_EMPTY = {
+  journey_id: "33333333-3333-3333-3333-333333333333",
+  brief_version_no: null,
+  total_properties: 0,
+  eligible_reviewing: 0,
+  verification_required: 0,
+  known_failures: 0,
+  fit_available: 0,
+  under_offer_market: 0,
+  changes: [],
+  open_tasks: 0,
+  attention: [],
+};
+
 export type FetchStub = ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) & {
   calls: string[];
 };
@@ -84,6 +98,8 @@ export function mockApi(overrides: Record<string, Handler> = {}): FetchStub {
     "/api/auth/me": { body: OWNER_ME },
     "/api/auth/refresh": { status: 401, body: { detail: "Not authenticated" } },
     "/api/journeys/33333333-3333-3333-3333-333333333333/brief": { body: BRIEF },
+    "/api/journeys/33333333-3333-3333-3333-333333333333/today": { body: TODAY_EMPTY },
+    "/api/journeys/33333333-3333-3333-3333-333333333333/properties": { body: [] },
     "/api/journeys": { body: [JOURNEY] },
     "/api/dev/outbox": { body: [] },
     ...overrides,

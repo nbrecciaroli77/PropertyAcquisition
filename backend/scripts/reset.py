@@ -11,6 +11,16 @@ load_dotenv()
 from app.db.base import dispose_engine, get_engine  # noqa: E402
 
 TABLES = (
+    "activity_events",
+    "property_tasks",
+    "property_notes",
+    "gate_waivers",
+    "match_evaluations",
+    "buyer_properties",
+    "facts",
+    "observations",
+    "listing_campaigns",
+    "properties",
     "audit_events",
     "brief_versions",
     "journeys",

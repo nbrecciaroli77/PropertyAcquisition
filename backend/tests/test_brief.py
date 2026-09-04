@@ -101,7 +101,7 @@ async def test_publish_creates_immutable_versions_with_actor_and_reason() -> Non
         first = published.json()["current_version"]
         assert first["version_no"] == 1
         assert first["reason"] == "First published brief"
-        assert first["reevaluation_state"] == "queued"
+        assert first["reevaluation_state"] == "completed"  # M3: synchronous re-evaluation on publish
 
         # A second publication adds a version and leaves version 1 untouched.
         row_version = published.json()["journey"]["row_version"]

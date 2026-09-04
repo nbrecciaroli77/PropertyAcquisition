@@ -55,8 +55,8 @@ Owner amendments that govern the whole build:
 | Milestone | Scope | Status |
 | --- | --- | --- |
 | 1 | Foundation, design system, shell, 25 concept routes, synthetic fixtures | **Done** — approved by the owner |
-| 2 | Authentication, workspace and tenancy, guided setup, versioned buying brief | **Done** — awaiting owner review |
-| 3 | Property workspace, evidence and matching (gates, fit, coverage) | Next |
+| 2 | Authentication, workspace and tenancy, guided setup, versioned buying brief | **Done** — approved by the owner; checkpoint `checkpoint/m2-accounts-brief` |
+| 3 | Property workspace, evidence and matching (gates, fit, coverage), waivers, notes/tasks/activity | **Done** — awaiting owner review (4 Sep 2026) |
 | 4 | Property gates and pipelines, "Add property" intake UI | Planned |
 | 5 | Intake idempotency, reminders ("Add reminder") | Planned |
 | 6 | Tasks and digest via a durable outbox, household invitations, export and deletion, audit browsing | Planned |
@@ -86,14 +86,29 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
   territories, included and excluded areas, an optional radius and travel anchors that stay Unknown.
 - Full detail and known limitations: `/app/docs/M2-report.md`.
 
+### Milestone 3 — delivered (4 September 2026)
+
+- Persisted property workspace: `properties` (unit-aware identity), `listing_campaigns` (raw guide, price
+  kind, market state), `observations` + `facts` (provenance, `known/unknown/not_applicable/conflict`),
+  `buyer_properties` (11 buyer states, saved flag, row_version), `match_evaluations`, `gate_waivers`,
+  `property_notes`, `property_tasks`, `activity_events`. Migration `2fc5f4775fef`.
+- Engine `gates_v1 + scoring_v1` (`app/services/matching.py`): pure, versioned, reproducible (`input_hash`).
+  Unknown never becomes Pass/Fail/0/false; fit and coverage separate; no Value Score.
+- Publish re-evaluates every property synchronously; `reevaluation_state` → `completed`; old versions kept.
+- Workflow transitions with `409 transition_not_allowed` / `stale_write` / `hard_failure_cannot_be_promoted`;
+  property-specific waivers (reasoned, attributed, revocable) that never alter the brief or the gate.
+- Screens on persisted data: Today, Discover, Pipeline, Saved, Compare (client-side selection, max 4),
+  Property page with Overview and Match & evidence (`?view=match`).
+- Dev-only fixture loader `POST /api/dev/load-demo-properties` (+ button on empty Discover/Today). Not intake.
+- Full detail, limitations and manual review steps: `/app/docs/M3-report.md`.
+
 ## Backlog
 
-### P0 — next milestone (3)
+### P0 — next milestone (4)
 
-- Property workspace: property record, evidence items and their sources, coverage and freshness.
-- Matching: evaluate a published brief against a property to produce a gate (Pass, Fail, Unknown) with the
-  reason for every criterion, plus a separate preference score and coverage indicator.
-- Consume the `reevaluation_state = queued` marker written at publication.
+- Property gates and pipelines as defined in the runbook Prompt 04; the deferred **Add property** intake UI
+  with the durable re-evaluation job worker.
+- Push list filters/sorts into SQL; consider a regional cache for the ~190 ms pooler round-trip.
 
 ### P1
 
@@ -112,9 +127,12 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
 ## Test and verification status
 
 - Backend: `tests/test_auth.py`, `test_rate_limit.py`, `test_tenancy.py`, `test_brief.py`, `test_system.py`,
-  plus QA-authored `backend_test.py`, `test_m2_public.py`, `test_m2_retest.py` — all passing.
-- Frontend: 47 Jest tests (including axe checks) and a five-viewport Playwright sweep (1440, 1024, 412, 390,
-  320) — all passing.
-- Independent QA: `/app/test_reports/iteration_1.json` (M1), `iteration_2.json` (M2 first pass, 4 findings),
-  `iteration_3.json` (M2 retest, all fixes verified, no new defects).
+  `test_matching.py`, `test_properties.py`, plus QA-authored `backend_test.py`, `test_m2_public.py`,
+  `test_m2_retest.py`, `test_m3_public.py` — 176 tests, all passing. Full run takes ~20 min against the
+  remote pooler; run in the background.
+- Frontend: 47 Jest tests (including axe checks), five-viewport Playwright sweep (1440, 1024, 412, 390, 320)
+  incl. property detail and match tab, and `e2e/workspace.spec.ts` (desktop) — all passing. Run Playwright
+  with `E2E_BASE_URL=<REACT_APP_BACKEND_URL> PW_CHROMIUM_PATH=/pw-browsers/chromium_headless_shell-1208/chrome-linux/headless_shell`.
+- Independent QA: `/app/test_reports/iteration_1.json` (M1), `iteration_2.json`/`iteration_3.json` (M2),
+  `iteration_4.json` (M3 consolidated cycle: backend 41/41, frontend all flows, one minor seed finding fixed).
 - Credentials for testing: `/app/memory/test_credentials.md`.

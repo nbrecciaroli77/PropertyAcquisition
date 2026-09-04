@@ -53,3 +53,8 @@ No provider is configured: every message lands in the durable outbox with
 - Password rules: at least 10 characters with a letter and a number.
 - `workspace_id` is never accepted from the client — extra body fields are rejected with `422`.
 - Cross-tenant reads and writes return `404`, never `403`.
+
+## Milestone 3 notes (4 Sep 2026)
+- Owner journey "Perth family home 2026" holds the 7 fixture properties (DEMO-001..007); brief is at v3 (v2/v3 identical, fixture-aligned).
+- Dev fixture loader for any signed-in writer: `POST /api/dev/load-demo-properties {"journey_id": ...}` (development only).
+- Playwright: `E2E_BASE_URL=<REACT_APP_BACKEND_URL> PW_CHROMIUM_PATH=/pw-browsers/chromium_headless_shell-1208/chrome-linux/headless_shell npx playwright test`.

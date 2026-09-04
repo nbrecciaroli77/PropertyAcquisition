@@ -1,6 +1,7 @@
 # Milestone 2 report — Authentication, workspace and the versioned buying brief
 
 Date: 4 September 2026 · Gate: initial private prototype · Working name: "Property Acquisition" (working concept)
+Owner approval: 4 September 2026 · Checkpoint: **`checkpoint/m2-accounts-brief`** (preserved via Save to GitHub before Milestone 3 began)
 
 ## What Milestone 2 delivers
 

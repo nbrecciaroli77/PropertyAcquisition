@@ -10,7 +10,62 @@ import { freshnessBand, SourceFreshness } from "../components/SourceFreshness";
 import { EmptyState, ErrorState, Skeleton } from "../components/States";
 import { StatusChip } from "../components/StatusChip";
 import { known, unknown } from "../lib/format";
+import type { PropertySummary } from "../lib/properties";
 import { properties } from "../lib/synthetic";
+
+/** 81C Sample Street as the M3 API returns it: unpriced, land unknown, budget and land gates Unknown. */
+const p81c: PropertySummary = {
+  id: "demo-006",
+  legacy_ref: "DEMO-006",
+  address_line: "81C Sample Street",
+  unit: "C",
+  suburb: "Example Central",
+  state: "WA",
+  postcode: null,
+  synthetic: true,
+  image_url: null,
+  image_attribution: null,
+  campaign: {
+    id: "c1",
+    source_label: "Manual entry",
+    market_state: "active",
+    price_kind: "expressions_of_interest",
+    raw_price: "Expressions of interest",
+    lower_minor: null,
+    upper_minor: null,
+    currency: "AUD",
+    price_source: "Manual entry",
+    last_checked_at: "2026-06-01T00:00:00Z",
+    freshness: "fresh",
+  },
+  facts: {
+    beds: fact("beds", 4),
+    land_sqm: { ...fact("land_sqm", null), value_state: "unknown" },
+  },
+  buyer_state: "reviewing",
+  saved: false,
+  buyer_row_version: 1,
+  evaluation: {
+    id: "e1",
+    brief_version_no: 2,
+    evaluation_version: "gates_v1+scoring_v1",
+    input_hash: "abc",
+    verdict: "unknown",
+    route: "verification_required",
+    fit: { state: "unavailable", pct: null, achieved: 0, max_achievable: 0, reason: "" },
+    coverage: { state: "known", pct: 20, assessed_weight: 20, total_enabled_weight: 100 },
+    gates: [{ criterion: "land_sqm", label: "Land area", outcome: "unknown", brief_value: "≥ 400 m²", observed: "Unknown", reason: "", fact_key: "land_sqm", source_label: "Manual entry", what_would_change: "" }],
+    components: [],
+    computed_at: "2026-06-01T00:00:00Z",
+  },
+  waived_criteria: [],
+  allowed_transitions: ["shortlisted"],
+  updated_at: "2026-06-01T00:00:00Z",
+};
+
+function fact(key: string, value: number | null): PropertySummary["facts"][string] {
+  return { key, value_state: "known", value_int: value, value_text: null, value_bool: null, source_kind: "manual", source_label: "Manual entry", observed_at: "2026-06-01T00:00:00Z", checked_at: "2026-06-01T00:00:00Z", freshness: "fresh", confidence: "stated", conflict_note: null };
+}
 
 describe("shared components — semantics", () => {
   it("StatusChip conveys status with text and icon, never colour alone", () => {
@@ -67,7 +122,6 @@ describe("shared components — semantics", () => {
   });
 
   it("PropertyCard shows raw guide, separate market/buyer state and unknown land for 81C", () => {
-    const p81c = properties.find((p) => p.legacyRef === "DEMO-006")!;
     render(
       <MemoryRouter>
         <PropertyCard property={p81c} />
@@ -77,6 +131,7 @@ describe("shared components — semantics", () => {
     expect(screen.getByTestId("property-card-market-demo-006")).toHaveTextContent("Market: Active");
     expect(screen.getByTestId("property-card-buyer-demo-006")).toHaveTextContent("You: Reviewing");
     expect(screen.getByTestId("property-card-fit-demo-006")).toHaveAttribute("data-state", "unknown");
+    expect(screen.getByTestId("property-card-gate-demo-006")).toHaveTextContent("Verification required");
     expect(screen.getAllByText("Unknown").length).toBeGreaterThanOrEqual(1);
   });
 

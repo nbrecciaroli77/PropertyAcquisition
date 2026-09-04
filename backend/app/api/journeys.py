@@ -24,6 +24,7 @@ from app.schemas.journeys import (
     JourneyUpdate,
     PublishRequest,
 )
+from app.services.properties import reevaluate_journey
 
 router = APIRouter(prefix="/journeys", tags=["journeys"])
 
@@ -264,6 +265,7 @@ async def publish_brief(
     if journey.status == "onboarding":
         journey.status = "active"
     journey.row_version += 1
+    await reevaluate_journey(db, journey, version, auth.user.id)
     await db.commit()
     await db.refresh(journey)
     return await get_brief(journey_id, auth, db)
