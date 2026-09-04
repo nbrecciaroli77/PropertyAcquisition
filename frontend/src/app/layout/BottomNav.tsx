@@ -11,7 +11,7 @@ export function BottomNav() {
     <nav
       aria-label="Primary, phone"
       data-testid="bottom-nav"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur-[2px] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface shadow-[0_-1px_0_rgba(0,0,0,0.04)] md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="grid grid-cols-4">

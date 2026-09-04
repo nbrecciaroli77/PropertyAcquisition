@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { Wordmark } from "../../components/Brand";
-import { displayUser } from "../../lib/synthetic";
+import { useAuth } from "../../lib/auth";
 import { railItems } from "../nav";
 
 /**
@@ -10,6 +10,15 @@ import { railItems } from "../nav";
  * Tablet (md–lg) icon rail with labels under icons (adaptive).
  */
 export function DesktopRail({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const { me } = useAuth();
+  const name = me?.user.display_name ?? "Account";
+  const initials =
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? "")
+      .join("") || "?";
   return (
     <nav
       aria-label="Primary"
@@ -76,11 +85,11 @@ export function DesktopRail({ collapsed, onToggle }: { collapsed: boolean; onTog
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-semibold"
             aria-hidden="true"
           >
-            {displayUser.initials}
+            {initials}
           </span>
           <span className={clsx("hidden min-w-0 leading-tight", !collapsed && "lg:block")}>
-            <span className="block truncate text-sm font-semibold">{displayUser.name}</span>
-            <span className="block truncate text-xs text-white/60">Synthetic account</span>
+            <span className="block truncate text-sm font-semibold">{name}</span>
+            <span className="block truncate text-xs text-white/60">{me?.workspace.name ?? "Workspace"}</span>
           </span>
         </div>
       </div>

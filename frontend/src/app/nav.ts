@@ -2,6 +2,7 @@ import {
   Bookmark,
   Columns3,
   Database,
+  FileText,
   Inbox,
   KanbanSquare,
   ListChecks,
@@ -22,6 +23,7 @@ export interface NavItem {
 /** Desktop rail + tablet rail. Order follows the Build Specification route list. */
 export const railItems: NavItem[] = [
   { to: "/app/today", label: "Today", icon: Sunrise, testId: "nav-today" },
+  { to: "/app/brief", label: "Brief", icon: FileText, testId: "nav-brief" },
   { to: "/app/discover", label: "Discover", icon: Inbox, testId: "nav-discover" },
   { to: "/app/pipeline", label: "Pipeline", icon: KanbanSquare, testId: "nav-pipeline" },
   { to: "/app/compare", label: "Compare", icon: Columns3, testId: "nav-compare" },

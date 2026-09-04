@@ -1,7 +1,11 @@
 import { axe } from "jest-axe";
-import { renderAt, screen } from "../test/helpers";
+import { mockAnonymous, renderAt, screen } from "../test/helpers";
 
 describe("public screens", () => {
+  beforeEach(() => {
+    mockAnonymous();
+  });
+
   it("Welcome renders landmarks, provider buttons disabled, and legal links", async () => {
     const { container } = renderAt("/");
     expect(screen.getByRole("heading", { level: 1, name: /welcome to property acquisition/i })).toBeInTheDocument();
@@ -10,6 +14,8 @@ describe("public screens", () => {
     expect(screen.getByTestId("provider-disclaimer")).toHaveTextContent(/never grants or implies access to your Gmail/i);
     expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+    expect(screen.getByTestId("create-account-link")).toHaveAttribute("href", "/signup");
+    expect(screen.getByTestId("forgot-password-link")).toHaveAttribute("href", "/forgot-password");
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getAllByRole("navigation").length).toBeGreaterThan(0);
     expect(screen.getByTestId("footer-terms")).toHaveAttribute("href", "/terms");
@@ -36,5 +42,10 @@ describe("public screens", () => {
   it("unknown routes render a 404", () => {
     renderAt("/nope");
     expect(screen.getByTestId("not-found-page")).toBeInTheDocument();
+  });
+
+  it("an anonymous deep link into the shell returns to sign in", async () => {
+    renderAt("/app/brief");
+    expect(await screen.findByTestId("welcome-page")).toBeInTheDocument();
   });
 });

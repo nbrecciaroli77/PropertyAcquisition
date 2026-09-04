@@ -3,10 +3,21 @@ import { Bell, ChevronDown, CircleHelp, LogOut, Plus, Search, Settings, UserRoun
 import { Link, useNavigate } from "react-router-dom";
 import { Wordmark } from "../../components/Brand";
 import { Button } from "../../components/Button";
-import { displayUser } from "../../lib/synthetic";
+import { useAuth } from "../../lib/auth";
+
+const initialsOf = (name: string): string =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "?";
 
 export function TopBar() {
   const navigate = useNavigate();
+  const { me, signOut } = useAuth();
+  const displayName = me?.user.display_name ?? "Account";
+  const initials = initialsOf(displayName);
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-canvas md:bg-canvas/95 md:backdrop-blur-[2px]" data-testid="top-bar">
       <div className="flex h-14 items-center gap-3 px-4 md:h-16 md:px-6 lg:px-8">
@@ -72,11 +83,11 @@ export function TopBar() {
               <button
                 type="button"
                 className="inline-flex h-10 items-center gap-1 rounded-md pl-1 pr-2 hover:bg-canvas-deep"
-                aria-label={`Account menu for ${displayUser.name}`}
+                aria-label={`Account menu for ${displayName}`}
                 data-testid="top-bar-account"
               >
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-semibold text-white" aria-hidden="true">
-                  {displayUser.initials}
+                  {initials}
                 </span>
                 <ChevronDown className="h-4 w-4 text-muted" aria-hidden="true" />
               </button>
@@ -84,8 +95,13 @@ export function TopBar() {
             <DropdownMenu.Portal>
               <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-[220px] rounded-md border border-border bg-surface p-1 shadow-raised" data-testid="account-menu">
                 <div className="px-3 py-2">
-                  <div className="text-sm font-semibold">{displayUser.name}</div>
-                  <div className="text-xs text-muted">Synthetic account · no sign-in yet</div>
+                  <div className="text-sm font-semibold">{displayName}</div>
+                  <div className="text-xs text-muted" data-testid="account-menu-email">
+                    {me?.user.email}
+                  </div>
+                  <div className="text-xs text-muted">
+                    {me?.workspace.name} · {me?.workspace.role}
+                  </div>
                 </div>
                 <DropdownMenu.Separator className="my-1 h-px bg-border" />
                 <MenuLink to="/app/settings" icon={<UserRound className="h-4 w-4" aria-hidden="true" />}>
@@ -95,9 +111,20 @@ export function TopBar() {
                   Settings
                 </MenuLink>
                 <DropdownMenu.Separator className="my-1 h-px bg-border" />
-                <MenuLink to="/" icon={<LogOut className="h-4 w-4" aria-hidden="true" />}>
-                  Leave preview
-                </MenuLink>
+                <DropdownMenu.Item asChild>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await signOut();
+                      navigate("/", { replace: true });
+                    }}
+                    className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-navy outline-none hover:bg-canvas-deep focus:bg-canvas-deep"
+                    data-testid="account-menu-sign-out"
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    Sign out
+                  </button>
+                </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>

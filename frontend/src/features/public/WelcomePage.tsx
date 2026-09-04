@@ -1,16 +1,41 @@
 import { Check, Eye, EyeOff, Lock } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { BrandMark, ConceptBadge } from "../../components/Brand";
 import { Button, ButtonLink } from "../../components/Button";
+import { FormNotice } from "../../components/Form";
+import { ApiError } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 
 export default function WelcomePage() {
+  const { status, signIn } = useAuth();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const next = params.get("next");
   const [showPassword, setShowPassword] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+  if (status === "authenticated") return <Navigate to={next ?? "/app"} replace />;
+
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setNotice("Accounts arrive in Milestone 2. Nothing was sent or stored. You can preview the shell with synthetic data below.");
+    setBusy(true);
+    setError(null);
+    try {
+      await signIn(email.trim(), password);
+      navigate(next ?? "/app", { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403 && err.message === "email_not_verified") {
+        navigate(`/verify-pending?email=${encodeURIComponent(email.trim())}`);
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Sign-in failed. Try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -74,6 +99,8 @@ export default function WelcomePage() {
                 type="email"
                 autoComplete="username"
                 placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 data-testid="sign-in-email"
                 className="h-11 w-full rounded-md border border-border bg-surface px-3 text-sm placeholder:text-muted"
               />
@@ -83,7 +110,11 @@ export default function WelcomePage() {
                 <label htmlFor="password" className="block text-sm font-semibold">
                   Password
                 </label>
-                <Link to="/" className="text-xs font-semibold text-eucalyptus-deep hover:underline underline-offset-4" data-testid="forgot-password-link">
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-semibold text-eucalyptus-deep hover:underline underline-offset-4"
+                  data-testid="forgot-password-link"
+                >
                   Forgot password?
                 </Link>
               </div>
@@ -94,6 +125,8 @@ export default function WelcomePage() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   data-testid="sign-in-password"
                   className="h-11 w-full rounded-md border border-border bg-surface px-3 pr-11 text-sm placeholder:text-muted"
                 />
@@ -109,23 +142,19 @@ export default function WelcomePage() {
                 </button>
               </div>
             </div>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input type="checkbox" name="remember" className="h-4 w-4 rounded-sm border-border accent-[var(--color-eucalyptus-deep)]" data-testid="remember-me" />
-              Remember me
-            </label>
 
-            {notice && (
-              <p role="status" data-testid="sign-in-notice" className="rounded-md border border-ochre/40 bg-ochre-soft px-3 py-2 text-sm text-ochre-deep">
-                {notice}
-              </p>
+            {error && (
+              <FormNotice tone="error" testId="sign-in-error">
+                {error}
+              </FormNotice>
             )}
 
-            <Button type="submit" size="lg" className="w-full" data-testid="sign-in-submit">
-              Continue
+            <Button type="submit" size="lg" className="w-full" disabled={busy} data-testid="sign-in-submit">
+              {busy ? "Signing in…" : "Sign in"}
             </Button>
             <p className="text-center text-sm text-muted">
               New to Property Acquisition?{" "}
-              <Link to="/about" className="font-semibold text-eucalyptus-deep hover:underline underline-offset-4" data-testid="create-account-link">
+              <Link to="/signup" className="font-semibold text-eucalyptus-deep hover:underline underline-offset-4" data-testid="create-account-link">
                 Create an account
               </Link>
             </p>
@@ -134,15 +163,15 @@ export default function WelcomePage() {
           <div className="card mt-8 p-5" data-testid="preview-panel">
             <p className="font-semibold">Your brief, evidence and next actions in one place.</p>
             <ul className="mt-3 space-y-2 text-sm text-charcoal">
-              {["Track shortlisted properties and provisional fit", "See evidence coverage and what is still unknown", "Act with clarity — nothing is sent without you"].map((t) => (
+              {["Set a versioned buying brief with hard rules and preferences", "See evidence coverage and what is still unknown", "Act with clarity — nothing is sent without you"].map((t) => (
                 <li key={t} className="flex items-start gap-2">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-eucalyptus-deep" aria-hidden="true" />
                   {t}
                 </li>
               ))}
             </ul>
-            <ButtonLink to="/app/today" variant="success" className="mt-4 h-auto w-full whitespace-normal py-3 text-center" data-testid="preview-shell-link">
-              Preview the shell with synthetic data
+            <ButtonLink to="/signup" variant="success" className="mt-4 h-auto w-full whitespace-normal py-3 text-center" data-testid="preview-shell-link">
+              Create an account to start a journey
             </ButtonLink>
           </div>
 

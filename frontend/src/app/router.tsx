@@ -1,9 +1,21 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppShell } from "./layout/AppShell";
 import { PublicShell } from "./layout/PublicShell";
+import { RequireAuth } from "../lib/auth";
+import { JourneyProvider, useJourneys } from "../lib/journey";
+import { Skeleton } from "../components/States";
 import AboutPage from "../features/public/AboutPage";
 import { LegalPage, NotFoundPage } from "../features/public/LegalPage";
 import WelcomePage from "../features/public/WelcomePage";
+import SignUpPage from "../features/auth/SignUpPage";
+import VerifyPendingPage from "../features/auth/VerifyPendingPage";
+import VerifyEmailPage from "../features/auth/VerifyEmailPage";
+import ForgotPasswordPage from "../features/auth/ForgotPasswordPage";
+import ResetPasswordPage from "../features/auth/ResetPasswordPage";
+import OutboxPage from "../features/dev/OutboxPage";
+import NewJourneyPage from "../features/journeys/NewJourneyPage";
+import BriefPage from "../features/brief/BriefPage";
+import BriefLocationsPage from "../features/brief/BriefLocationsPage";
 import TodayPage from "../features/today/TodayPage";
 import DiscoverPage from "../features/discover/DiscoverPage";
 import PipelinePage from "../features/pipeline/PipelinePage";
@@ -16,11 +28,25 @@ import SettingsPage from "../features/settings/SettingsPage";
 import MorePage from "../features/more/MorePage";
 import PropertyDetailPage from "../features/property/PropertyDetailPage";
 
+/** Sends a signed-in owner to setup when no journey exists yet. */
+function AppLanding() {
+  const { journeys, loading } = useJourneys();
+  if (loading) return <Skeleton className="h-40" label="Opening your workspace" />;
+  if (journeys.length === 0) return <Navigate to="/app/journeys/new" replace />;
+  return <Navigate to="/app/today" replace />;
+}
+
 export const routes = [
   {
     element: <PublicShell />,
     children: [
       { path: "/", element: <WelcomePage /> },
+      { path: "/signup", element: <SignUpPage /> },
+      { path: "/verify-pending", element: <VerifyPendingPage /> },
+      { path: "/verify-email", element: <VerifyEmailPage /> },
+      { path: "/forgot-password", element: <ForgotPasswordPage /> },
+      { path: "/reset-password", element: <ResetPasswordPage /> },
+      { path: "/dev/outbox", element: <OutboxPage /> },
       { path: "/about", element: <AboutPage /> },
       { path: "/terms", element: <LegalPage kind="terms" /> },
       { path: "/privacy", element: <LegalPage kind="privacy" /> },
@@ -29,10 +55,19 @@ export const routes = [
   },
   {
     path: "/app",
-    element: <AppShell />,
+    element: (
+      <RequireAuth>
+        <JourneyProvider>
+          <AppShell />
+        </JourneyProvider>
+      </RequireAuth>
+    ),
     children: [
-      { index: true, element: <Navigate to="/app/today" replace /> },
+      { index: true, element: <AppLanding /> },
       { path: "today", element: <TodayPage /> },
+      { path: "journeys/new", element: <NewJourneyPage /> },
+      { path: "brief", element: <BriefPage /> },
+      { path: "brief/locations", element: <BriefLocationsPage /> },
       { path: "discover", element: <DiscoverPage /> },
       { path: "pipeline", element: <PipelinePage /> },
       { path: "compare", element: <ComparePage /> },

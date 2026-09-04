@@ -1,0 +1,40 @@
+{
+  "summary": "Retest of the eight iteration_2 fixes plus a light regression, all against the public preview URL. Backend: created /app/backend/tests/test_m2_retest.py (8 pytest cases, all passed in 233s) covering the re-keyed login lockout (6 wrong passwords on one fixed X-Forwarded-For -> 401x5 then 429 with a positive Retry-After and 'Too many failed attempts' detail; the same lockout with a NEW X-Forwarded-For on every attempt; no collateral lockout - a different email on a fresh IP still gets 401 and its correct password still logs in; the correct password during the window still refused with 429; scripts.unlock restores access), the readable non-httpOnly pa_signed_in=1 marker cookie next to httpOnly pa_access/pa_refresh and its removal on logout (with /api/auth/me 401 after), anonymous /api/auth/me 401, and the 10-session cap (12 logins -> <=10 live rows, exactly one current:true, oldest session's cookie now 401, revoke of another session works, no _id leakage). Playbook checks: all password hashes start with $2b$, auth cookies httpOnly+secure+samesite=none, live sessions per user now all <=10. Regression by API: signup 201 -> login before verify 403 -> outbox token -> verify 200 -> token reuse 400 -> login 200; cross-tenant brief read 404; anonymous /api/journeys 401; client-sent workspace_id rejected 422; QA account qa-cyaf3p96 confirmed unlocked (200) after the lockout suite. Frontend (real browser): public sweep of /, /signup, /verify-pending, /dev/outbox, /forgot-password at 320 and 390 - zero horizontal overflow, zero >=400 /api responses and zero console errors (only the known React Router v7 future-flag warnings), so FIX 2 and FIX 4 hold; authenticated sweep of /app/today, /app/brief, /app/brief/locations, /app/settings, /app/journeys/new at 320 and 390 - overflow 0 on all ten combinations; document.cookie exposes only pa_signed_in=1 and a reload keeps the session with no 401s; onboarding primary button sequence captured as ('Loading...', disabled) then ('Save and continue', enabled), and three rapid 'Save and continue' clicks advanced the wizard to onboarding_step 4 / row_version 4 with no 409 banner and no console errors (FIX 3); brief numeric ids are all hyphenated (land-sqm-min/max, floor-sqm-min/max, beds/baths/parking-min/max, no underscore ids left) and the field-linked error renders as id/testid land-sqm-max-error alongside blocker-land_sqm.max (FIX 7); the two-tab stale save produced 409 -> automatic GET brief -> visible message 'This brief changed in another session, so we reloaded the latest version. Reapply your edits.' with the field reloaded to the other tab's value and an immediate retry saving 200 (FIX 5); the mobile bottom tab bar computes to rgb(255,255,255), opacity 1, backdrop-filter none with labels in rgb(61,107,81) and stays legible with content scrolled behind it at 320 and 390 (FIX 8); settings shows THIS DEVICE on the current session and Revoke on the others - revoking issued DELETE /api/auth/sessions/{id} 200, the list dropped from 8 to 7 rows and the current device stayed signed in (FIX 6). Spot regression in the UI: anonymous /app/brief bounced to /?next=%2Fapp%2Fbrief, sign-in returned to /app/brief, Google and Apple buttons are visible but disabled with the Gmail statement, publish created immutable version 2 (201) with actor email and reason in the history next to version 1, and the synthetic-data banner is present. No new defects; all eight fixes verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "scripts/unlock.py", "issue": "unlock only deletes the 'email:<address>' LoginAttempt rows, so a tripped IP bucket (20 failures / 15 min on one X-Forwarded-For hop) cannot be cleared operationally. Consider accepting an optional IP argument or a --all flag."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "App mount / brief and journeys load", "issue": "Duplicate fetches on mount: GET /api/journeys fires twice and GET /api/journeys/{id}/brief fires twice on /app/journeys/new. Harmless but each call costs ~1s on Supabase ap-southeast-2.", "affected_selectors": ["[data-testid=\"onboarding-next\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "/app/settings at 320 CSS px", "issues": ["One inline SPAN.text-muted extends past clientWidth (its own box only); documentElement.scrollWidth still equals clientWidth so there is no page-level overflow - cosmetic, worth a min-w-0/break-words pass."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m2_retest.py",
+    "/app/test_reports/pytest/m2_retest.xml",
+    "/app/backend/tests/test_m2_public.py"
+  ],
+  "action_items": [
+    "Optional: dedupe the double GET /api/journeys and GET /api/journeys/{id}/brief on mount.",
+    "Optional: let scripts/unlock clear the ip: bucket as well.",
+    "Housekeeping: this pass mutated the seeded demo data - the owner workspace now has a second journey 'My buying journey' (onboarding_step 4, created by the FIX 3 rapid-click test), the seeded journey has a published version 2 with reason 'QA retest publish', and its draft ceiling is 1,315,000 with land minimum 400 m2. Run `cd /app/backend && python -m scripts.reset --confirm && python -m scripts.seed` if pristine demo data is wanted before a demo."
+  ],
+  "critical_code_review_comments": [
+    "useBrief.save 409 path replaces the local draft with the server draft, so the user's in-flight edits are dropped; the message does say 'Reapply your edits', but keeping the conflicting field values in a diff or a 'restore my edits' affordance would be kinder.",
+    "login() writes two LoginAttempt rows per failure (email + ip) and deletes both keys on success, so one user's success clears the shared IP counter for everyone behind that hop; acceptable for a private prototype, worth a comment."
+  ],
+  "updated_files": ["/app/backend/tests/test_m2_retest.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Verification account qa-retest13052@pa-prototype.com / Prototype2026pass (verified, no journey) created for the signup regression. Extra owner journey 'My buying journey' (a86c6344-eaec-4ad9-985a-83e3e51d0e5b) and brief version 2 on the seeded journey were created as side effects of the FIX 3 and publish spot checks.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "As documented in /app/memory/test_credentials.md; qa-cyaf3p96@pa-prototype.com / Prototype2026reset9 was used for the lockout suite and is unlocked again (login verified 200).",
+  "context_for_next_testing_agent": "Run the retest suite with: cd /app/backend && python -m pytest tests/test_m2_retest.py -p no:randomly -q (about 4 min; it hits the public ingress). Its lockout cases call `python -m scripts.unlock` before and after each case, so the QA account is left usable. UI notes that differ from iteration_2: the sign-in controls are [data-testid=\"sign-in-email\"] / \"sign-in-password\" / \"sign-in-submit\" (not signin-submit); the brief draft does NOT autosave on blur - you must click [data-testid=\"brief-save-draft\"], and field-linked errors only appear after a save/publish attempt; session revoke buttons are [data-testid=\"revoke-session-<uuid>\"] and rows are [data-testid=\"session-<uuid>\"]; brief numeric ids are hyphenated now (land-sqm-min etc) while publish blockers still use the API field path (blocker-land_sqm.max). Waiting for [data-testid=\"brief-save-draft\"] or \"brief-publish\" with a 45s timeout plus ~2.5s is reliable.",
+  "rca_of_the_issue": "Not applicable - no failures reproduced this pass. The previously failing lockout now keys on the email plus the first X-Forwarded-For hop, which survives the rotating ingress pod IPs, and the 320px overflow is gone after the min-w-0 changes."
+}

@@ -31,8 +31,8 @@ class TestHealth:
         assert r.status_code == 200, r.text[:300]
         data = r.json()
         assert data["status"] == "ok"
-        assert data["milestone"] == 1
-        assert data["database"] == "not_configured"
+        assert data["milestone"] == 2
+        assert data["database"] == "connected"
 
     def test_health_correlation_id_generated(self, client):
         r = client.get(f"{BASE_URL}/api/health", timeout=30)
@@ -52,7 +52,7 @@ class TestMeta:
         return r.json()
 
     def test_meta_core_fields(self, meta):
-        assert meta["milestone"] == 1
+        assert meta["milestone"] == 2
         assert meta["synthetic_data_only"] is True
         assert isinstance(meta["app_name"], str) and meta["app_name"]
         assert isinstance(meta["gate"], str)
@@ -101,4 +101,4 @@ class TestRouteSurface:
         if r.status_code != 200:
             pytest.skip("openapi not exposed through ingress")
         paths = set(r.json().get("paths", {}))
-        assert paths == {"/api/health", "/api/meta"}, paths
+        assert {"/api/health", "/api/meta", "/api/auth/login", "/api/journeys"} <= paths, paths

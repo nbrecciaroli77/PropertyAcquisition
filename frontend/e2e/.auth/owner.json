@@ -1,0 +1,57 @@
+{
+  "cookies": [
+    {
+      "name": "cf_clearance",
+      "value": "R_t__kbTfwmLeHBDmb.BreIKJHyTE5xzJeUg81zYqog-1788510819-1.2.1.1-Ec0MHygHaKbGFh9CtjkkfQhKyKNUW4cya_SJW5wzYf7BmmbedK_K58ZkU1wG3jJwaAS8zlJZ.rEVFAzIKstBQtS35i.OSoH6.mSlOsTtgMze49kGXX0IIYE9ykPwWUQKMtwM77QF6LZS0UrRf73Ici1LDT_jBQMFNbjncPHXtPxYfMUMqiM8BDO_bYvQz52_2moGg.F6U.fDnt9nbU3_AqZalzgzIk6k2HR0GSp7RV4OaTiMSIvJ2wyrOmOYqXUIcIQ52N8c9tqcKiXAhhjvS4GPb.PqdAtBVztoZLByvn3rkcEFaSnBXLuIx4Q2hnRMAQo3cW3xk_I4WT07d5jmFod7BMk4j6Rkw8FRK_awmnoCiNW7rgscy98kkjB8jjt7cSO1d_jQLzTigugpD55lZw",
+      "domain": ".property-find-1.preview.emergentagent.com",
+      "path": "/",
+      "expires": 1820046819.707895,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": "https://property-find-1.preview.emergentagent.com",
+      "_crHasCrossSiteAncestor": false
+    },
+    {
+      "name": "pa_access",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxYjc5MDhiYS02MWIxLTQzMjEtOTI1OC03ZjUzNjlhOTczOWYiLCJzaWQiOiIxMzlmOWM0Yy1lMWUxLTRjOWEtODYzZS0yMGVhYjc3MDE5NjIiLCJlbWFpbCI6Im93bmVyQHByb3BlcnR5YWNxdWlzaXRpb24tZGVtby5jb20iLCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzg4NTEwODI0LCJleHAiOjE3ODg1MTE3MjR9.yexvx7jriOtLVzgUovmuVO-PGLtobRs3N5hNppm39x8",
+      "domain": "property-find-1.preview.emergentagent.com",
+      "path": "/",
+      "expires": 1788511725.957547,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "pa_refresh",
+      "value": "kIu10MyxEqDJhbMTCXtH08S3d5ht0Jv9idj9TFywuKk",
+      "domain": "property-find-1.preview.emergentagent.com",
+      "path": "/",
+      "expires": 1789115625.957662,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "pa_signed_in",
+      "value": "1",
+      "domain": "property-find-1.preview.emergentagent.com",
+      "path": "/",
+      "expires": 1789115625.957695,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://property-find-1.preview.emergentagent.com",
+      "localStorage": [
+        {
+          "name": "pa.rail.collapsed",
+          "value": "0"
+        }
+      ]
+    }
+  ]
+}

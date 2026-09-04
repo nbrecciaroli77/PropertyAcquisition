@@ -4,6 +4,11 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N"]
+# FastAPI dependency injection relies on call expressions in argument defaults.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*" = ["E501", "I001"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -12,10 +17,12 @@ ignore_missing_imports = true
 files = ["server.py", "app", "tests"]
 
 [[tool.mypy.overrides]]
-module = "tests.backend_test"
+module = ["tests.backend_test", "tests.test_m2_public", "tests.test_m2_retest"]
 ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-env = []
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"

@@ -8,7 +8,9 @@ import { SourceFreshness } from "../../components/SourceFreshness";
 import { EmptyState } from "../../components/States";
 import { StatusChip } from "../../components/StatusChip";
 import { known } from "../../lib/format";
-import { displayUser, properties, workspace } from "../../lib/synthetic";
+import { properties } from "../../lib/synthetic";
+import { useAuth } from "../../lib/auth";
+import { useJourneys } from "../../lib/journey";
 
 const changes = [
   { id: "demo-001", kind: "New match", tone: "pass" as const, why: "Passes every hard rule on original-source facts; land 690 m² is well above the 400 m² rule." },
@@ -23,20 +25,48 @@ const nextActions = [
 ];
 
 export default function TodayPage() {
+  const { me } = useAuth();
+  const { active } = useJourneys();
   const needsVerification = properties.filter((p) => p.gate === "Unknown").length;
   const newMatches = properties.filter((p) => p.gate === "Pass" && p.buyerState === "Reviewing").length;
   return (
     <>
       <PageHeader
         eyebrow="Today"
-        title={`Good morning, ${displayUser.name}`}
+        title={`Good morning, ${me?.user.display_name ?? "there"}`}
         description={
           <>
-            Here's what changed in <strong className="text-navy">{workspace.name}</strong>. Local time {workspace.timezone}.
+            Here's what changed in <strong className="text-navy">{me?.workspace.name ?? "your workspace"}</strong>.
+            Local time {me?.user.timezone ?? "Australia/Perth"}.
           </>
         }
         testId="today-header"
       />
+
+      <section aria-labelledby="brief-status-heading" className="card mb-6 flex flex-col gap-3 p-5 md:flex-row md:items-center md:justify-between" data-testid="today-brief-status">
+        <div className="min-w-0">
+          <h2 id="brief-status-heading" className="text-h3 font-semibold">
+            {active ? active.name : "No buying journey yet"}
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            {!active
+              ? "Create a journey and publish a buying brief to start matching."
+              : active.status === "onboarding"
+                ? `Setup is paused at step ${active.onboarding_step} of 6. Nothing is lost — resume whenever you like.`
+                : active.current_version_no === null
+                  ? "Your brief has never been published. Publishing creates an immutable version and queues re-evaluation."
+                  : `Brief version ${active.current_version_no} is current · ${active.published_versions} version(s) published.`}
+          </p>
+        </div>
+        <ButtonLink
+          to={!active ? "/app/journeys/new" : active.status === "onboarding" ? "/app/journeys/new" : "/app/brief"}
+          variant="success"
+          className="shrink-0"
+          data-testid="today-brief-cta"
+        >
+          {!active ? "Create a journey" : active.status === "onboarding" ? "Resume setup" : "Open the buying brief"}
+        </ButtonLink>
+      </section>
 
       <section aria-label="Snapshot" className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         <MetricCard value={newMatches} label="New matches" helper="Since your last check" tone="good" icon={<Home className="h-5 w-5" aria-hidden="true" />} testId="metric-new-matches" />
