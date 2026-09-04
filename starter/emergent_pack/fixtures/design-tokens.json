@@ -1,0 +1,25 @@
+{
+  "name": "Property Acquisition working concept",
+  "status": "unapproved public brand",
+  "colors": {
+    "canvas": "#F7F3EC",
+    "navy": "#102A36",
+    "eucalyptus": "#6F8F7A",
+    "ochre": "#C88A52",
+    "surface": "#FFFFFF",
+    "border": "#DED9D0",
+    "mutedText": "#647078",
+    "risk": "#9B4A3A"
+  },
+  "typography": {
+    "preferred": "Manrope",
+    "fallback": "Inter, system-ui, sans-serif"
+  },
+  "radius": {"small": 8, "medium": 12, "large": 18},
+  "layout": {
+    "desktopRail": true,
+    "phoneBottomNavigation": ["Today", "Properties", "Saved", "More"],
+    "minimumViewportCssPx": 320
+  }
+}
+

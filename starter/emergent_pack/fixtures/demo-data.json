@@ -1,0 +1,24 @@
+{
+  "fixtureVersion": "1.0",
+  "synthetic": true,
+  "warning": "Demo-only fictional data. Do not treat as current listings or migrate to production.",
+  "workspace": {"name": "Northside Home Search", "timezone": "Australia/Perth", "currency": "AUD"},
+  "brief": {
+    "version": 1,
+    "hardRules": {"maxPrice": 1300000, "propertyType": "Detached house", "minBeds": 3, "minBaths": 1, "minLandSqm": 400},
+    "preferences": {"preferredPriceMax": 1200000, "preferredLandSqm": 500, "renovation": ["Moderate", "Major"]},
+    "weights": {"price": 30, "land": 30, "location": 20, "condition": 20}
+  },
+  "properties": [
+    {"legacyRef": "DEMO-001", "address": "12 Banksia Crescent", "suburb": "Example Park", "state": "WA", "priceKind": "From", "rawPrice": "From $1,100,000", "lowerPrice": 1100000, "beds": 4, "baths": 2, "cars": 2, "landSqm": 690, "marketState": "Active", "buyerState": "Reviewing", "condition": "Usable home", "locationTier": "Strong alternative", "evidence": "original-source", "expected": "eligible-high-fit"},
+    {"legacyRef": "DEMO-002", "address": "8 Paperbark Way", "suburb": "Example North", "state": "WA", "priceKind": "Contact agent", "rawPrice": "Contact agent", "beds": 3, "baths": 1, "cars": 1, "landSqm": 640, "marketState": "Active", "buyerState": "Reviewing", "condition": null, "locationTier": "Primary", "evidence": "partial", "expected": "verification-required"},
+    {"legacyRef": "DEMO-003", "address": "4 Wattle Street", "suburb": "Example Park", "state": "WA", "priceKind": "Exact", "rawPrice": "$1,050,000", "lowerPrice": 1050000, "upperPrice": 1050000, "beds": 3, "baths": 2, "cars": 2, "landSqm": 318, "marketState": "Active", "buyerState": "Rejected", "condition": "Renovation", "locationTier": "Primary", "evidence": "original-source", "expected": "hard-fail-land"},
+    {"legacyRef": "DEMO-004", "address": "22 Jarrah Road", "suburb": "Example Coast", "state": "WA", "priceKind": "Conflicting", "rawPrice": "$1.20m index / From $1.35m detail", "beds": 4, "baths": 2, "cars": 2, "landSqm": 720, "marketState": "Active", "buyerState": "Reviewing", "condition": "Usable home", "locationTier": "Conditional", "evidence": "conflict", "expected": "verification-required-price"},
+    {"legacyRef": "DEMO-005", "address": "81A Sample Street", "suburb": "Example Central", "state": "WA", "priceKind": "Range", "rawPrice": "$980,000-$1,050,000", "lowerPrice": 980000, "upperPrice": 1050000, "beds": 3, "baths": 2, "cars": 2, "landSqm": 420, "marketState": "Active", "buyerState": "Shortlisted", "condition": "Usable home", "locationTier": "Strong alternative", "evidence": "manual", "expected": "keep-separate-from-81C"},
+    {"legacyRef": "DEMO-006", "address": "81C Sample Street", "suburb": "Example Central", "state": "WA", "priceKind": "Expressions of interest", "rawPrice": "Expressions of interest", "beds": 4, "baths": 2, "cars": 2, "landSqm": null, "marketState": "Active", "buyerState": "Reviewing", "condition": null, "locationTier": "Strong alternative", "evidence": "manual", "expected": "keep-separate-from-81A"},
+    {"legacyRef": "DEMO-007", "address": "15 Tuart Place", "suburb": "Example North", "state": "WA", "priceKind": "Range", "rawPrice": "$1,000,000-$1,100,000", "lowerPrice": 1000000, "upperPrice": 1100000, "beds": 4, "baths": 2, "cars": 2, "landSqm": 680, "marketState": "Under offer", "buyerState": "Archived", "condition": "Usable home", "locationTier": "Primary", "evidence": "original-source", "expected": "market-under-offer-not-buyer-offer"}
+  ],
+  "duplicateReplay": {"source": "fixture-email", "externalId": "MSG-DEMO-001", "contentHash": "demo-repeatable-hash", "propertyLegacyRef": "DEMO-001", "expectedCreatedSideEffects": 1},
+  "draft": {"propertyLegacyRef": "DEMO-001", "recipient": "agent@example.invalid", "state": "UNSENT", "expectedExternalMessages": 0}
+}
+
