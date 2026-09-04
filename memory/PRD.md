@@ -4,7 +4,7 @@ Last updated: June 2026. Owner: Nick Brecciaroli. Working name **Property Acquis
 
 ## Original problem statement
 
-Build IDEA-010 Property Acquisition as an initial private responsive-web prototype. Prompt 00 of the supplied runbook required a plan only — file receipt confirmation, requirements map (Built now / Deferred / Blocked), concrete stack proposal, explicit disclosure of every substitution from the preferred TypeScript + React + Node + PostgreSQL direction, an explanation of tenant isolation / idempotent intake / migrations / seed-reset / feature flags / tests, a milestone plan matching prompts 01–07 with checkpoints and rollback, and only architecture-material questions. Implementation was explicitly forbidden in this step.
+Build IDEA-010 Property Acquisition as an initial private responsive-web prototype following the supplied runbook (prompts 00–07). Prompt 00 (plan) was approved with amendments; Prompt 01 (Milestone 1: foundation, repository and visual system) has been delivered. Each milestone ends with lint/typecheck/tests/responsive screenshots, a named checkpoint, Save to GitHub (owner action) and a hard stop for review.
 
 ## Hard boundaries (do not violate in any future session)
 
@@ -17,42 +17,40 @@ Build IDEA-010 Property Acquisition as an initial private responsive-web prototy
 - Keep unit suffixes distinct: 81A and 81C must never merge.
 - Drafts do not send. Calendar reminders do not book. Advertised inspections are not confirmed attendance.
 - `workspace_id` is never accepted from the client; authority comes from authenticated membership.
-- Secrets never in prompts, repo, fixtures or logs.
+- Secrets never in prompts, repo, fixtures or logs. Never request pasted git credentials.
 
 ## Authority
 
-`IDEA-010-Product-Definition-and-Build-Specification.md` is the accepted scope and wins over the concept images where they conflict. Two known conflicts already resolved: no Map or Comparables page, and no Indicative Value / Value Score (both appear only in `00-design-system.png`).
+`IDEA-010-Product-Definition-and-Build-Specification.md` wins over concept images. Resolved conflicts: no Map or Comparables page; no Indicative Value / Value Score.
 
 ## Source pack location
 
-`/app/starter/emergent_pack/` — README-FIRST.md, build specification (.md + .docx), prompt runbook (.md + .docx), `fixtures/` (4 files), `concept-images/` (25 PNGs, all verified readable).
+`/app/starter/emergent_pack/` — README-FIRST.md, build specification, prompt runbook, `fixtures/` (copied to `/app/fixtures/`), `concept-images/` (25 PNGs; mapping in `/app/docs/concept-image-map.md`).
 
-## Architecture (approved direction)
+## Architecture (approved, with owner amendments)
 
-- Client: React 18 + TypeScript, react-scripts, Tailwind driven by CSS variables generated from `design-tokens.json`, Radix primitives, lucide-react, Motion with reduced-motion respect.
-- API: Python 3.11 + FastAPI + Pydantic v2, modular monolith, all routes under `/api`. **Substitution from Node** — forced by the read-only supervisor config that hard-codes `uvicorn server:app`.
-- Database: managed PostgreSQL (Neon/Supabase) + SQLAlchemy 2.0 + Alembic. Authorised by owner. `DATABASE_URL` outstanding.
-- Jobs: DB-backed durable job table, in-process scheduler with locking claims (no broker available; single-replica constraint documented).
-- Email: pluggable provider, default null provider + durable outbox, delivery suppressed.
-- Tenant isolation: `ScopedRepository` injecting `workspace_id`, 404-not-403 on non-membership, build-failing tenancy suite. Weaker than DB-enforced RLS — recorded in the limitations note.
-- Full plan, including the substitution table and compensating controls: `/app/memory/PLAN-00-master-build-plan.md`.
+- Client: React 18 + TypeScript (strict), react-scripts, Tailwind driven only by CSS variables generated from `fixtures/design-tokens.json` (`frontend/scripts/sync-design.mjs`), Radix primitives, lucide-react, CSS motion with reduced-motion respect. Jest + RTL + jest-axe; Playwright for e2e/responsive screenshots.
+- API: Python 3.11 + FastAPI + Pydantic v2, all routes under `/api`. Substitution from Node accepted by owner.
+- Database (from M2): **owner's Supabase Free PostgreSQL** + SQLAlchemy 2.0 + Alembic. Never Neon. `DATABASE_URL` outstanding. Tenant isolation: app-layer `ScopedRepository` + DB constraints + **Supabase RLS wherever compatible**, build-failing cross-tenant suite, limitations recorded explicitly.
+- Jobs: DB-backed durable job table, in-process scheduler with locking claims.
+- Email: null provider + durable outbox; delivery suppressed. Auth: email/password only (from an `integration_expert` playbook); Google deferred (OFF), Apple locked OFF; AI extraction OFF (deterministic parser).
+- Feature flags live in `backend/app/core/config.py` and are exposed at `GET /api/meta`.
 
 ## What's been implemented
 
-- **June 2026** — Nothing. Prompt 00 planning deliverable only (`/app/memory/PLAN-00-master-build-plan.md`). `/app` has no backend or frontend scaffold. Owner placed the build ON HOLD after reviewing the plan.
+- **June 2026 — Milestone 1 complete** (`/app/docs/M1-report.md`). Backend scaffold (`/api/health`, `/api/meta`, flag registry, correlation IDs, safety tests). Frontend: token-driven design system, public Welcome/Sign in (providers disabled, no-Gmail statement) and About, Terms/Privacy, authenticated shell (desktop rail / tablet icon rail / phone bottom nav), routes Today, Discover, Pipeline, Compare, Saved, Tasks, Agents, Sources, Settings, More, Property detail, shared components (PropertyCard, StatusChip, EvidenceState, SourceFreshness, FitRing, Empty/Error/Skeleton, ConfirmDialog, CompareRow), a11y foundations, PWA manifest + shell SW. Lint/typecheck/30 unit tests/75 Playwright checks/5 pytest all green. Screenshots in `frontend/e2e/screenshots/`.
 
 ## Prioritised backlog
 
-- **P0 / blocked on owner** — Approval to start milestone 1 (foundation, repo scaffold, visual system). No database needed for this milestone.
-- **P0 / blocked on credential** — `DATABASE_URL` for managed PostgreSQL, required before milestone 2.
-- **P1** — M2 auth + workspace + versioned brief (auth code must come from an `integration_expert` playbook, never improvised).
-- **P1** — M3 property domain, hard gates, fit vs evidence coverage, compare, shortlist.
-- **P1** — M4 intake events, idempotency, CSV/manual/pasted-text intake, conservative dedupe with undo/split.
-- **P2** — M5 tasks, ICS, UNSENT drafts, notification centre, digest preview + outbox.
-- **P2** — M6 privacy, lifecycle, audit, export/delete, WCAG 2.2 AA pass, security hardening.
-- **P2** — M7 final acceptance gate, then private preview only after explicit approval.
-- **Later gates (not authorised)** — transactional email provider, Google/Apple sign-in, AI extraction enablement, inbound email, licensed feeds, read-only Hub migration rehearsal.
+- **P0 / blocked on owner** — Review of M1; Save to GitHub with checkpoint `checkpoint/m1-foundation`; approval to start M2.
+- **P0 / blocked on credential** — Supabase `DATABASE_URL` before M2.
+- **P1 — M2** auth (email/password via `integration_expert` playbook), workspace/membership, journeys, onboarding (`/app/journeys/new`), versioned brief (`/app/brief`, `/app/brief/locations`), tenancy suite, Alembic migrations, seed/reset, RLS where compatible.
+- **P1 — M3** property domain, gates_v1/scoring_v1 (replace display placeholders in `frontend/src/lib/synthetic.ts`), Discover master-detail, compare selection, shortlist transitions, real server clock (replace `lib/clock.ts`).
+- **P1 — M4** intake events, idempotency, CSV/manual/pasted-text, dedupe with undo/split.
+- **P2 — M5** tasks/ICS, UNSENT drafts, notification centre, digest preview + outbox.
+- **P2 — M6** privacy, lifecycle, audit, export/delete, WCAG pass, hardening.
+- **P2 — M7** acceptance gate; private preview only after explicit approval.
 
 ## Next task
 
-Wait for owner approval. On approval, start milestone 1 per prompt 01 and stop for review at the checkpoint.
+Stop for owner review of Milestone 1. On approval and receipt of the Supabase `DATABASE_URL`, start Milestone 2 per Prompt 02 (call `integration_expert` for auth first).

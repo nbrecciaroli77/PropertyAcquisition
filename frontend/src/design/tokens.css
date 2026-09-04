@@ -1,0 +1,38 @@
+/* GENERATED from fixtures/design-tokens.json by scripts/sync-design.mjs — do not edit by hand */
+:root {
+  --color-canvas: #F7F3EC;
+  --color-navy: #102A36;
+  --color-eucalyptus: #6F8F7A;
+  --color-ochre: #C88A52;
+  --color-surface: #FFFFFF;
+  --color-border: #DED9D0;
+  --color-muted-text: #647078;
+  --color-risk: #9B4A3A;
+  --color-eucalyptus-deep: #3D6B51;
+  --color-eucalyptus-soft: #E7EFE6;
+  --color-eucalyptus-tint: #F1F6F2;
+  --color-ochre-deep: #8A5A2B;
+  --color-ochre-soft: #F7EBDD;
+  --color-risk-soft: #F5E4E0;
+  --color-navy-soft: #E4EAEE;
+  --color-charcoal: #2A2E33;
+  --color-stone: #D9DDD7;
+  --color-canvas-deep: #EFEAE1;
+  --font-sans: "Manrope", Inter, system-ui, sans-serif;
+  --radius-small: 8px;
+  --radius-medium: 12px;
+  --radius-large: 18px;
+  --viewport-min: 320px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+}

@@ -3,20 +3,31 @@
 Working name: **Property Acquisition** (IDEA-010 lineage retained, no new brand invented).
 Gate: OWNER APPROVED — INITIAL PRIVATE PROTOTYPE. Not a public launch.
 
-Status: **ON HOLD at owner request. Plan delivered, no code written, no scaffold created, nothing deployed.**
+Status: **APPROVED with amendments (June 2026). Milestone 1 delivered — see `/app/docs/M1-report.md`. Stopped for review before Milestone 2.**
 
 ## Decisions recorded (owner, this session)
 
 | # | Decision | Consequence |
 | --- | --- | --- |
-| 1 | **Managed PostgreSQL** (Neon/Supabase, ap-southeast-2) via SQLAlchemy 2.0 + Alembic | Option A of §4 is authorised. MongoDB compensating-control fallback is dropped. `DATABASE_URL` is an outstanding credential, required before milestone 2 |
+| 1 | **Owner's Supabase Free project (PostgreSQL)** via SQLAlchemy 2.0 + Alembic. **Never create or recommend a throwaway Neon database.** | Option A authorised. MongoDB fallback dropped. `DATABASE_URL` (Supabase) is an outstanding credential, required before milestone 2 |
 | 2 | **Deterministic parser only** for pasted listing text | `ai_extraction` flag ships default OFF; provider-neutral adapter interface still built so it can be enabled later without domain change. No model cost in this prototype |
 | 3 | **Email/password only**; Google sign-in deferred | `google_sign_in` flag OFF. Welcome screen still states that a Google identity would never imply Gmail permission. Apple remains locked OFF |
 | 4 | **Digest delivery suppressed** | Milestone 5 ships in-app preview + durable outbox with status `suppressed_no_provider`. A transactional provider key (Resend/SendGrid) is a separate later gate |
 | 5 | **GitHub via the platform "Save to GitHub" action** | Owner performs repo creation/push. Platform checkpoints serve as milestone history in the interim. I will never request pasted git credentials |
 | 6 | **Milestone 1 may proceed without a database**; `DATABASE_URL` supplied before milestone 2 | Sequencing confirmed — but see status above, milestone 1 is NOT authorised to start yet |
 
-Resume condition: explicit owner approval to start milestone 1.
+## Amendments accepted (owner, June 2026)
+
+1. Supabase Free project supplies PostgreSQL before M2; no Neon.
+2. Python 3.11 + FastAPI substitution accepted.
+3. Application-layer tenant scoping accepted **for the private prototype only**. Retain the build-failing cross-tenant suite; implement database-level constraints (NOT NULL `workspace_id` FKs, composite unique keys) and **Supabase RLS policies wherever technically compatible** with the SQLAlchemy service-role connection; record any remaining limitation explicitly in `docs/security-privacy-limitations.md`.
+4. M1 uses no database credentials and synthetic display data only. ✅
+5. All 25 concept images mapped to routes/components: `docs/concept-image-map.md`. ✅
+6. M1 gate: lint, type checks, tests, responsive screenshots, named checkpoint `checkpoint/m1-foundation`, Save to GitHub (owner action), report, stop. ✅ report at `docs/M1-report.md`.
+7. No live Drive, Gmail, portals, Supabase or other external services during M1. ✅
+8. Welcome shows Google/Apple as disabled buttons with "not enabled in this prototype" + no-Gmail statement. Jest + RTL is the unit runner.
+
+Resume condition for M2: owner review of M1 + Supabase `DATABASE_URL`.
 
 
 ---

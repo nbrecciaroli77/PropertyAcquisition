@@ -1,0 +1,7 @@
+node_modules
+build
+coverage
+e2e/results
+e2e/report
+e2e/screenshots
+.eslintcache

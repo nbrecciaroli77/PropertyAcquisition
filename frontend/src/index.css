@@ -1,0 +1,87 @@
+@import "./design/tokens.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-canvas text-navy text-body;
+    min-width: var(--viewport-min);
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply text-navy;
+    text-wrap: balance;
+  }
+  ::selection {
+    background: var(--color-eucalyptus-soft);
+    color: var(--color-navy);
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-eucalyptus-deep);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface border border-border rounded-lg shadow-card;
+  }
+  .label {
+    @apply text-label uppercase text-muted;
+  }
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:bg-navy focus:text-white focus:px-4 focus:py-2 focus:rounded-md;
+  }
+  .rise-in {
+    animation: rise-in 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--color-canvas-deep) 25%, var(--color-stone) 37%, var(--color-canvas-deep) 63%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+}

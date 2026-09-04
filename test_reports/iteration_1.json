@@ -1,0 +1,36 @@
+{
+  "summary": "Milestone 1 full review on the preview URL. Backend: created /app/backend/tests/backend_test.py (20 pytest cases) covering /api/health, /api/meta flags, correlation-id echo/generation, no-value-score, and route-surface 404s - all 20 passed (openapi paths == {/api/health,/api/meta}). Frontend: real-browser Playwright runs covering Welcome/About/Terms/Privacy/404, all 11 /app routes (banner + exactly one h1 + landmarks), /app redirect, responsive nav at 1440/1024/412/390, horizontal-overflow guard on 15 routes x 5 viewports (320/390/412/1024/1440 - zero overflow), Discover filters+empty state+view toggles+card semantics, Pipeline Rejected column, Compare (3 columns, Unknown text, 390px stacking with per-column labels), Tasks reminder confirm dialog, Agents draft (no Send), Sources statuses, Settings destructive dialog, and a11y (skip link first tab stop -> focuses #main, 3px focus ring, aria-current). All acceptance criteria in the request verified as met; 1 medium console-error/a11y defect and 3 minor issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Button.tsx / ConfirmDialog.tsx", "issue": "Button is not wrapped in React.forwardRef, so every Radix Dialog.Trigger/Dialog.Close asChild logs a console error: 'Warning: Function components cannot be given refs ... Check the render method of Primitive.button.Slot' on /app/tasks, /app/agents, /app/settings. This violates the 'no console errors' criterion and breaks Radix focus restoration: after confirming/cancelling a dialog document.activeElement is BODY instead of the trigger button (keyboard users lose their place).", "selector": "[data-testid=\"add-reminder-i1\"], [data-testid=\"draft-copy\"], [data-testid=\"request-deletion\"]", "priority": "MEDIUM"},
+      {"component": "PropertyDetailPage (unknown id)", "issue": "/app/properties/does-not-exist renders a 'Property not found' card with zero h1 elements and no data-testid on the state; every other app view has exactly one h1 and testable state ids.", "selector": "main (no h1, no [data-testid=\"empty-state\"]/error-state)", "priority": "LOW"},
+      {"component": "PipelinePage", "issue": "Property cards inside stage columns have no data-testid (only pipeline-stage-* wrappers); assertions must fall back to href selectors like a[href=\"/app/properties/demo-003\"].", "selector": "[data-testid=\"pipeline-stage-rejected\"] li", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Authenticated shell at 390px (e.g. /app/tasks scrolled)", "issues": ["Sticky TopBar background is translucent, so page text visibly bleeds through behind the logo/notification row while scrolling; use an opaque surface (or stronger backdrop) on phone."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Wrap Button (and ButtonLink) in React.forwardRef so Radix asChild triggers/closes receive refs - removes the console error and restores focus to the trigger after dialog close.",
+    "Add an h1 (and a data-testid such as property-not-found) to the unknown-property state on /app/properties/:id.",
+    "Add data-testid to pipeline stage property cards (e.g. pipeline-card-demo-003).",
+    "Make the mobile sticky TopBar background opaque to stop content bleed-through at 390px."
+  ],
+  "critical_code_review_comments": [
+    "components/Button.tsx: function component passed to Radix `asChild` - must be forwardRef; this is the root cause of both the console warning and the lost focus-restore.",
+    "Backend surface is minimal and correct: only /api/health and /api/meta registered, correlation-id middleware echoes the inbound x-correlation-id, no DB client instantiated in M1, all settings from app/core/config.py.",
+    "Compare grid uses ARIA row/rowheader/cell roles rather than a <table>; works, but verify with a screen reader that the container carries role=table/grid so the roles are valid.",
+    "Discover 'Known failure' empty state correctly explains it is not a failed check and offers discover-clear-filter - good boundary wording; 'Book inspection', 'Send' buttons and 'value score' are absent everywhere as required."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "seed_data_creation": "None - synthetic fixture data only, no DB in M1.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "None required - /app/memory/test_credentials.md confirms M1 has no auth; shell is open at /app/today",
+  "context_for_next_testing_agent": "Backend regression suite: /app/backend/tests/backend_test.py (20 cases, all green). Frontend verified end-to-end on the preview URL: no horizontal overflow at 320/390/412/1024/1440 on all public+app routes; rail collapse persists via localStorage key pa.rail.collapsed; bottom nav Properties has aria-current=page on /app/discover and /app/pipeline; dialogs are focus-trapped and Escape-closable (only focus-restore is broken by the missing forwardRef). Remaining open items are the 4 action items above.",
+  "rca_of_the_issue": "ConfirmDialog passes a plain function component <Button> into Radix Dialog.Trigger/Dialog.Close with asChild. Radix clones the child and attaches a ref; because Button does not use React.forwardRef the ref is dropped, React logs the 'Function components cannot be given refs' warning (console.error) and Radix cannot return focus to the trigger element on close, leaving focus on <body>."
+}
