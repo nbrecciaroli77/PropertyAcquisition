@@ -72,6 +72,11 @@ export default function WelcomePage() {
             Welcome to Property Acquisition
           </h1>
           <p className="mt-2 text-muted">Sign in to access your brief, evidence and next actions.</p>
+          {next && next.startsWith("/app") && (
+            <p className="mt-3 rounded-md border border-ochre/40 bg-ochre-soft px-3 py-2 text-sm text-ochre-deep" role="status" data-testid="session-expired-notice">
+              Your session ended. Sign in again and you will return to where you were.
+            </p>
+          )}
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <ProviderButton label="Continue with Google" testId="sign-in-google" />

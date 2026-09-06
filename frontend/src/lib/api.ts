@@ -59,12 +59,38 @@ function fieldErrorsFromDetail(detail: Detail): FieldError[] {
   return [];
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** Fired when a session cannot be refreshed, so the shell can return to the sign-in screen. */
+export const SESSION_EXPIRED_EVENT = "pa.session-expired";
+
+// Paths where a 401 is the answer, not an expired access token.
+const NO_REFRESH_PATHS = ["/auth/login", "/auth/refresh", "/auth/logout", "/auth/logout-all", "/auth/signup"];
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** One refresh at a time; concurrent 401s share the same attempt. */
+function refreshSession(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${base}/api/auth/refresh`, { method: "POST", credentials: "include" })
+      .then((r) => r.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+export async function apiFetch<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
   const response = await fetch(`${base}/api${path}`, {
     ...init,
     credentials: "include",
     headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
   });
+  // The 15-minute access token expires mid-session; refresh once and replay, or surface the sign-out.
+  if (response.status === 401 && !retried && !NO_REFRESH_PATHS.some((p) => path.startsWith(p))) {
+    if (await refreshSession()) return apiFetch<T>(path, init, true);
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  }
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {

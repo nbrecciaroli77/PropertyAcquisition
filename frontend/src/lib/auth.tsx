@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { ApiError, authApi, type MeResponse } from "./api";
+import { ApiError, SESSION_EXPIRED_EVENT, authApi, type MeResponse } from "./api";
 
 type Status = "checking" | "authenticated" | "anonymous";
 
@@ -61,6 +61,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     bootstrapped.current = true;
     void load();
   }, [load]);
+
+  useEffect(() => {
+    // A request failed and the session could not be refreshed: return to sign-in instead of showing raw 401s.
+    const expire = () => {
+      setMe(null);
+      setStatus("anonymous");
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, expire);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expire);
+  }, []);
 
   const value = useMemo<AuthValue>(
     () => ({

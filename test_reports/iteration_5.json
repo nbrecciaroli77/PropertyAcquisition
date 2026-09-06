@@ -1,0 +1,24 @@
+{
+  "summary": "Bug-fix verification (iteration 5) for the 'Not authenticated' error on Save & Continue in the guided journey setup. Backend refresh-rotate flow verified via pytest (4/4). Frontend primary reproduction on 390x844 mobile: with pa_access removed, POST /api/auth/refresh is called exactly once, the original PATCH /api/journeys/{id} 401 is transparently replayed as 200, the follow-up PUT .../brief/draft returns 200, and the wizard advances to 'Step 2 of 6 · Purchase timing' with no red 'Not authenticated' banner. Session-expired path verified: removing both pa_access and pa_refresh redirects to /?next=/app/discover with the session-expired-notice visible; signing in again lands back on /app/discover. Negative wrong-password check: exactly one POST /api/auth/login (401) and zero /auth/refresh calls, invalid-credentials message shown. No regressions observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_refresh_flow.py",
+    "/app/test_reports/pytest/iteration_5_refresh.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "api.ts refresh dedup uses a module-level promise cleared in .finally() — correct. NO_REFRESH_PATHS excludes /auth/login|refresh|logout|signup so no loop is possible on wrong-password.",
+    "Cleanup: journeys created via backend test (TEST_refreshflow_*) remain in Supabase; no DELETE /api/journeys endpoint exists, leaving them is acceptable per test brief."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_refresh_flow.py (new)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (3/3 scenarios: mobile refresh-replay, both-cookies-gone session-expired, wrong-password negative)"},
+  "test_credentials": "owner@propertyacquisition-demo.com / Prototype2026pass; lockout-drills@propertyacquisition-demo.com for negative login",
+  "seed_data_creation": "Backend pytest created 1 journey named TEST_refreshflow_<hex> in the owner workspace via POST /api/journeys (no delete endpoint; left in place).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The refresh-and-replay logic in /app/frontend/src/lib/api.ts and session-expired handling in /app/frontend/src/lib/auth.tsx and WelcomePage.tsx are verified end-to-end. Playwright context.clear_cookies(name='pa_access') works (Playwright >=1.43). Backend refresh rotates pa_refresh and rejects the previous value with 401.",
+  "rca of the issue": "Root cause: The frontend only refreshed the access token during initial bootstrap in AuthProvider.load(). Once the 15-minute pa_access cookie expired, subsequent API calls (e.g. PATCH /api/journeys/{id} from 'Save and continue') hit 401 and surfaced the raw 'Not authenticated' FastAPI error. Fix: apiFetch now retries once for 401 on any non-auth path by calling POST /api/auth/refresh (deduplicated across concurrent requests) and replaying the original request. If refresh fails, a pa.session-expired event flips AuthProvider to anonymous, RequireAuth redirects to /?next=<path>, and WelcomePage shows the session-expired-notice. Verified reproduction + fix both on 390x844 (mobile, the reported viewport) and 1920x1080 desktop."
+}

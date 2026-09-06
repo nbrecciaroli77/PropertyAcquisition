@@ -102,6 +102,14 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
 - Dev-only fixture loader `POST /api/dev/load-demo-properties` (+ button on empty Discover/Today). Not intake.
 - Full detail, limitations and manual review steps: `/app/docs/M3-report.md`.
 
+### Post-M3 fix — 6 September 2026
+
+- Bug: after the 15-minute access token expired, any API call showed a raw "Not authenticated" while the
+  shell still looked signed in (owner hit it on step 1 of the guided setup). Fix: `apiFetch` refreshes the
+  session once on 401 (deduplicated) and replays the request; if refresh fails it emits `pa.session-expired`,
+  the shell returns to sign-in with `?next=` and a notice, and sign-in lands back on the same page.
+  Verified by QA (`/app/test_reports/iteration_5.json`) and 3 new Jest tests.
+
 ## Backlog
 
 ### P0 — next milestone (4)
