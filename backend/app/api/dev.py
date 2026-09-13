@@ -34,7 +34,7 @@ class OutboxOut(BaseModel):
 
 @router.get("/outbox", response_model=list[OutboxOut])
 async def list_outbox(email: str | None = None, db: AsyncSession = Depends(get_db)) -> list[OutboxOut]:
-    if not get_settings().is_development:
+    if not get_settings().dev_routes_enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     query = select(OutboxMessage).order_by(OutboxMessage.created_at.desc()).limit(50)
     if email:
@@ -64,7 +64,7 @@ async def load_demo(
     body: LoadDemoIn, auth: AuthContext = Depends(get_auth), db: AsyncSession = Depends(get_db)
 ) -> dict[str, int | str]:
     """Development-only fixture creation from fixtures/demo-data.json. Not the Add property intake."""
-    if not get_settings().is_development:
+    if not get_settings().dev_routes_enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     require_writer(auth)
     journey = await scoped_journey(body.journey_id, db, auth.workspace.id)

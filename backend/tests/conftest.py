@@ -1,3 +1,4 @@
+import os
 import uuid
 from collections.abc import AsyncIterator
 
@@ -6,6 +7,10 @@ import pytest_asyncio
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select, update
+
+# Enable dev routes for the in-process test runner BEFORE load_dotenv so that
+# the .env value (DEV_ROUTES_ENABLED=false) does not override this.
+os.environ.setdefault("DEV_ROUTES_ENABLED", "true")
 
 load_dotenv()
 

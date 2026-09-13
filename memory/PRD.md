@@ -135,9 +135,10 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
 ## Test and verification status
 
 - Backend: `tests/test_auth.py`, `test_rate_limit.py`, `test_tenancy.py`, `test_brief.py`, `test_system.py`,
-  `test_matching.py`, `test_properties.py`, plus QA-authored `backend_test.py`, `test_m2_public.py`,
-  `test_m2_retest.py`, `test_m3_public.py` — 176 tests, all passing. Full run takes ~20 min against the
-  remote pooler; run in the background.
+  `test_matching.py`, `test_properties.py`, `test_security_dev_surface.py`, plus QA-authored `backend_test.py`,
+  `test_m2_public.py`, `test_m2_retest.py`, `test_m3_public.py` — 182 tests, all passing.
+- Security hotfix applied (checkpoint/security-public-dev-surface): `/api/dev/*` routes now governed by
+  `DEV_ROUTES_ENABLED` env var (false by default); all outstanding auth tokens invalidated and outbox purged.
 - Frontend: 47 Jest tests (including axe checks), five-viewport Playwright sweep (1440, 1024, 412, 390, 320)
   incl. property detail and match tab, and `e2e/workspace.spec.ts` (desktop) — all passing. Run Playwright
   with `E2E_BASE_URL=<REACT_APP_BACKEND_URL> PW_CHROMIUM_PATH=/pw-browsers/chromium_headless_shell-1208/chrome-linux/headless_shell`.

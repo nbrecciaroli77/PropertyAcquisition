@@ -52,6 +52,12 @@ class Settings:
     login_lockout_ip_attempts: int = 20
     login_lockout_minutes: int = 15
     synthetic_data_only: bool = True
+    # Explicitly opt-in to expose dev/inspection routes.  Must be set to "true" in
+    # the process environment; the .env file must NOT enable this outside a local
+    # developer workstation or an in-process test runner.
+    dev_routes_enabled: bool = field(
+        default_factory=lambda: os.environ.get("DEV_ROUTES_ENABLED", "false").strip().lower() == "true"
+    )
     flags: dict[str, FlagState] = field(default_factory=lambda: dict(DEFAULT_FLAGS))
 
     @property

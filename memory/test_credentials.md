@@ -40,10 +40,13 @@ Reset everything with `cd /app/backend && python -m scripts.reset --confirm`.
 ## Email delivery
 
 No provider is configured: every message lands in the durable outbox with
-`delivery_state = suppressed_no_provider`. Read verification and reset links from:
+`delivery_state = suppressed_no_provider`. The inspection route is
+**disabled in all non-local environments** (controlled by `DEV_ROUTES_ENABLED`).
 
-- UI: `/dev/outbox` (development only; also `/dev/outbox?email=<address>`)
-- API: `GET /api/dev/outbox?email=<address>`
+In the in-process test runner the conftest sets `DEV_ROUTES_ENABLED=true`
+automatically so tests can still read tokens:
+
+- API: `GET /api/dev/outbox?email=<address>` (returns 404 unless `DEV_ROUTES_ENABLED=true`)
 
 ## Notes for automated tests
 
