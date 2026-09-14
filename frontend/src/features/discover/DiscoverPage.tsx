@@ -35,7 +35,7 @@ export default function DiscoverPage() {
         description="Properties waiting for your first decision. Market state and your workflow state are shown separately."
         testId="discover-header"
         actions={
-          <ButtonLink to="/app/sources" variant="secondary" size="sm" data-testid="discover-add-property">
+          <ButtonLink to="/app/properties/add" variant="secondary" size="sm" data-testid="discover-add-property">
             Add property
           </ButtonLink>
         }

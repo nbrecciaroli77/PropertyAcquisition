@@ -16,6 +16,11 @@ export default function PipelinePage() {
         title="Your ongoing work"
         description="Buyer workflow stages you own. A source status update can never move a property between these columns; open a property to change its stage."
         testId="pipeline-header"
+        actions={
+          <ButtonLink to="/app/properties/add" variant="secondary" size="sm" data-testid="pipeline-add-property">
+            Add property
+          </ButtonLink>
+        }
       />
       {status === "error" && <ErrorState description={message ?? "The pipeline could not be loaded."} onRetry={reload} />}
       {status === "no-journey" && (

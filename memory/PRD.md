@@ -1,7 +1,7 @@
 # IDEA-010 Property Acquisition — Product requirements and status
 
 Working name: "Property Acquisition" (working concept, not final). Gate: **initial private prototype**.
-Last updated: 14 September 2026 (Prompt 03A foundation alignment complete).
+Last updated: 14 September 2026 (Prompt 04.1 manual property intake complete).
 
 ## Execution state
 
@@ -9,8 +9,9 @@ Last updated: 14 September 2026 (Prompt 03A foundation alignment complete).
 |--------|-------|--------|
 | 00–03 | Foundation, design system, auth, tenancy, buying brief, property workspace | **Complete** |
 | Security hotfix | `/api/dev/*` deny-by-default, outbox purge, token invalidation | **Complete** — `checkpoint/security-public-dev-surface` |
-| **03A** | Post-M3 foundation alignment — connector catalog, source readiness, sender aliases, discovery/intake attribution, scheduler observability, enrichment records, report-run metadata; frontend `/dev/outbox` → genuine 404 | **Complete** — `checkpoint/m3a-foundation-alignment` |
-| **04** | Property gates and pipelines, Add property intake UI | **Next** |
+| **03A** | Post-M3 foundation alignment — connector catalog, source readiness, sender aliases, discovery/intake attribution, scheduler observability, enrichment records, report-run metadata | **Complete** — `checkpoint/m3a-foundation-alignment` |
+| **04.1** | Manual property intake (structured form, URL + facts, pasted text), durable IntakeEvent, workspace-scoped idempotency, exact-address duplicate detection, deterministic text parser v1.0 | **Complete** — tested 12/12 scenarios |
+| **04.2** | Pipeline logic, duplicate review center (merge/split/undo) | **Next** |
 
 ## Original problem statement (owner's brief)
 

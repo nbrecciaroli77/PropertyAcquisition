@@ -45,6 +45,15 @@ async def client() -> AsyncIterator[AsyncClient]:
         yield c
 
 
+@pytest_asyncio.fixture
+async def async_client() -> AsyncIterator[AsyncClient]:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="https://property-find-1.preview.emergentagent.com",
+    ) as c:
+        yield c
+
+
 @pytest_asyncio.fixture(autouse=True, scope="session")
 async def _cleanup() -> AsyncIterator[None]:
     yield

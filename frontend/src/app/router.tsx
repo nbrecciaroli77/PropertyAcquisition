@@ -26,6 +26,7 @@ import SourcesPage from "../features/sources/SourcesPage";
 import SettingsPage from "../features/settings/SettingsPage";
 import MorePage from "../features/more/MorePage";
 import PropertyDetailPage from "../features/property/PropertyDetailPage";
+import AddPropertyPage from "../features/intake/AddPropertyPage";
 
 /** Sends a signed-in owner to setup when no journey exists yet. */
 function AppLanding() {
@@ -75,6 +76,7 @@ export const routes = [
       { path: "sources", element: <SourcesPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "more", element: <MorePage /> },
+      { path: "properties/add", element: <AddPropertyPage /> },
       { path: "properties/:id", element: <PropertyDetailPage /> },
     ],
   },

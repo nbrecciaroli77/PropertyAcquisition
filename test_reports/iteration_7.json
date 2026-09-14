@@ -1,0 +1,23 @@
+{
+  "summary": "M4.1 Manual Property Intake — all 12 scenario tests passed. Added async_client fixture alias to conftest.py (tests used async_client but conftest only had client). Both user accounts (owner + other tenant) existed. All scenarios verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_intake.py",
+    "/app/test_reports/pytest/pytest_intake_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": ["/app/backend/tests/conftest.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "N/A - backend only"},
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "M4.1 intake fully tested. conftest.py now has async_client fixture. All 12 scenarios pass: structured form happy path, idempotency (structured + URL), exact-address duplicate, 81A≠81C isolation, URL-with-facts, pasted text parsing, unknown facts preserved, parse-preview, requires_review, cross-tenant isolation, price parsing (auction/range/ambiguous)."
+}
