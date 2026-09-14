@@ -1,7 +1,7 @@
 # IDEA-010 Property Acquisition — Product requirements and status
 
 Working name: "Property Acquisition" (working concept, not final). Gate: **initial private prototype**.
-Last updated: 14 September 2026 (Prompt 04.1 manual property intake complete).
+Last updated: 14 September 2026 (Prompt 04.2 complete — checkpoint/m4-2-intake-review).
 
 ## Execution state
 
@@ -11,7 +11,9 @@ Last updated: 14 September 2026 (Prompt 04.1 manual property intake complete).
 | Security hotfix | `/api/dev/*` deny-by-default, outbox purge, token invalidation | **Complete** — `checkpoint/security-public-dev-surface` |
 | **03A** | Post-M3 foundation alignment — connector catalog, source readiness, sender aliases, discovery/intake attribution, scheduler observability, enrichment records, report-run metadata | **Complete** — `checkpoint/m3a-foundation-alignment` |
 | **04.1** | Manual property intake (structured form, URL + facts, pasted text), durable IntakeEvent, workspace-scoped idempotency, exact-address duplicate detection, deterministic text parser v1.0 | **Complete** — tested 12/12 scenarios |
-| **04.2** | Pipeline logic, duplicate review center (merge/split/undo) | **Next** |
+| **04.2** | CSV intake (preview, server-authoritative re-parse, formula-injection protection), duplicate review (merge/split/undo, 81A/C warning, snapshot-based undo), sources & coverage screen (all required fields, read-only, synthetic), sender-alias review (demo workspace only) | **Complete** — `checkpoint/m4-2-intake-review` |
+| **MVP Ops** | Notifications, channel preferences, reminders/ICS, digest/report previews, essential account/privacy functions | **Next** |
+| **Production Hardening** | Security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Backlog** |
 
 ## Original problem statement (owner's brief)
 
@@ -68,10 +70,10 @@ Owner amendments that govern the whole build:
 | 2 | Authentication, workspace and tenancy, guided setup, versioned buying brief | **Done** — approved; checkpoint `checkpoint/m2-accounts-brief` |
 | 3 | Property workspace, evidence and matching (gates, fit, coverage), waivers, notes/tasks/activity | **Done** — approved |
 | 3A | Post-M3 foundation alignment (connector, readiness, aliases, discovery, intake, scheduler, enrichment, reports) | **Done** — checkpoint `checkpoint/m3a-foundation-alignment` |
-| 4 | Property gates and pipelines, "Add property" intake UI | Planned |
-| 5 | Intake idempotency, reminders ("Add reminder") | Planned |
-| 6 | Tasks and digest via a durable outbox, household invitations, export and deletion, audit browsing | Planned |
-| 7 | Hardening, accessibility and performance passes, final checks | Planned |
+| 4.1 | Manual property intake (structured form, URL + facts, paste), IntakeEvent, idempotency, duplicate detection | **Done** — `checkpoint/m4-1-manual-intake` |
+| 4.2 | CSV intake, duplicate review (merge/split/undo, unit-suffix warning), sources & coverage (all fields, read-only), sender-alias review (demo only) | **Done** — `checkpoint/m4-2-intake-review` |
+| MVP Ops | Notifications, channel preferences, reminders/ICS, digest/report previews, essential account/privacy functions | **Planned — Next** |
+| Hardening | Security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Planned** |
 
 ### Milestone 1 — delivered (June 2026)
 
