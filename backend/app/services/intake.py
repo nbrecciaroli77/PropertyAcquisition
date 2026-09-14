@@ -468,6 +468,20 @@ async def process_intake(
     db.add(intake_ev)
     await db.flush()
 
+    from app.services.notifications import create_notification_event
+    await create_notification_event(
+        db,
+        workspace_id=journey.workspace_id,
+        category="new_property",
+        fingerprint=f"property:{prop.id}:created",
+        title=f"New property: {address_line}",
+        message=f"{address_line}, {suburb} was added to your property workspace.",
+        safe_deep_link=f"/app/properties/{prop.id}",
+        property_id=prop.id,
+        source_event_id=intake_ev.id,
+        evidence_ref={"intake_mechanism": intake_mechanism_override or request.mode},
+    )
+
     # Run match evaluation if a published brief exists
     from app.db.models import BriefVersion  # local import to avoid circular
     brief = (

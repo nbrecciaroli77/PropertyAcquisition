@@ -22,6 +22,8 @@ from app.db.models import (  # noqa: E402
     ConnectorInstance,
     Journey,
     Membership,
+    Property,
+    PropertyTask,
     SenderAlias,
     SourceReadiness,
     User,
@@ -29,6 +31,7 @@ from app.db.models import (  # noqa: E402
 )
 from app.schemas.brief import Area, BriefPayload, default_brief  # noqa: E402
 from app.services.properties import load_demo_properties, reevaluate_journey  # noqa: E402
+from app.services.notifications import create_notification_event  # noqa: E402
 
 ACCOUNTS = [
     {
@@ -373,6 +376,63 @@ async def _seed_demo_instances(db: AsyncSession, workspace_id: object, actor_id:
                 await db.flush()
 
 
+async def _seed_demo_notifications(db: AsyncSession, workspace_id: object, journey: Journey, user: User) -> None:
+    """Create M5.1 examples only for the explicitly labelled demo workspace."""
+    property_row = (
+        await db.execute(select(Property).where(Property.workspace_id == workspace_id).order_by(Property.created_at))
+    ).scalars().first()
+    if property_row is None:
+        return
+    task = (
+        await db.execute(
+            select(PropertyTask).where(PropertyTask.workspace_id == workspace_id, PropertyTask.title == "Review the contract conditions")
+        )
+    ).scalar_one_or_none()
+    if task is None:
+        task = PropertyTask(
+            workspace_id=workspace_id,
+            journey_id=journey.id,
+            property_id=property_row.id,
+            title="Review the contract conditions",
+            notes="Synthetic example for the demo workspace only.",
+            assignee_user_id=user.id,
+            priority="high",
+            due_at=now_utc(),
+            timezone="Australia/Perth",
+            reminder_offset_minutes=60,
+            status="open",
+            created_by=user.id,
+        )
+        db.add(task)
+        await db.flush()
+    await create_notification_event(
+        db,
+        workspace_id=workspace_id,
+        category="evidence_gap",
+        fingerprint="demo:m5-1:evidence-gap",
+        title="Evidence gap to review",
+        message="Synthetic example: confirm the land-size evidence for this property.",
+        safe_deep_link=f"/app/properties/{property_row.id}",
+        priority="high",
+        property_id=property_row.id,
+        evidence_ref={"synthetic": True},
+    )
+    await create_notification_event(
+        db,
+        workspace_id=workspace_id,
+        category="task_due_soon",
+        fingerprint="demo:m5-1:task-due-soon",
+        title=f"Task due soon: {task.title}",
+        message="Synthetic example: this task needs attention.",
+        safe_deep_link=f"/app/tasks?task={task.id}",
+        priority="high",
+        property_id=property_row.id,
+        task_id=task.id,
+        recipient_ids={user.id},
+        evidence_ref={"synthetic": True},
+    )
+
+
 def _seed_brief() -> BriefPayload:
     """Aligned with fixtures/demo-data.json: ceiling $1.3m, detached house, 3 beds, 1 bath, 400 m² land."""
     brief = default_brief()
@@ -507,6 +567,7 @@ async def _seed_account(db: AsyncSession, spec: dict) -> None:
     if spec.get("is_demo_workspace"):
         await _seed_demo_aliases(db, workspace.id)
         await _seed_demo_instances(db, workspace.id, user.id)
+        await _seed_demo_notifications(db, workspace.id, journey, user)
     print(
         f"seeded {email} · workspace {workspace.name} · journey {journey.name} · "
         f"{created} fixture properties added · {evaluated} evaluated against brief v{version.version_no}"

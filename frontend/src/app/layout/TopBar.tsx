@@ -1,9 +1,11 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Bell, ChevronDown, CircleHelp, LogOut, Plus, Search, Settings, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Wordmark } from "../../components/Brand";
 import { Button } from "../../components/Button";
 import { useAuth } from "../../lib/auth";
+import { notificationApi } from "../../lib/notifications";
 
 const initialsOf = (name: string): string =>
   name
@@ -18,6 +20,12 @@ export function TopBar() {
   const { me, signOut } = useAuth();
   const displayName = me?.user.display_name ?? "Account";
   const initials = initialsOf(displayName);
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void notificationApi.list().then((result) => active && setUnread(result.unread_count)).catch(() => active && setUnread(0));
+    return () => { active = false; };
+  }, []);
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-canvas md:bg-canvas/95 md:backdrop-blur-[2px]" data-testid="top-bar">
       <div className="flex h-14 items-center gap-3 px-4 md:h-16 md:px-6 lg:px-8">
@@ -60,15 +68,13 @@ export function TopBar() {
             Add property
           </Button>
           <Link
-            to="/app/tasks"
+            to="/app/notifications"
             className="relative inline-flex h-10 w-10 items-center justify-center rounded-md text-navy hover:bg-canvas-deep"
-            aria-label="Notifications, 3 unread"
+            aria-label={`Notifications, ${unread} unread`}
             data-testid="top-bar-notifications"
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
-            <span className="absolute right-1.5 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-ochre px-1 text-[10px] font-bold text-white" aria-hidden="true">
-              3
-            </span>
+            {unread > 0 && <span className="absolute right-1.5 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-ochre px-1 text-[10px] font-bold text-white" aria-hidden="true" data-testid="notification-unread-badge">{unread > 99 ? "99+" : unread}</span>}
           </Link>
           <Link
             to="/about"

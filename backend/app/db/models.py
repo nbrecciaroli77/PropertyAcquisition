@@ -492,12 +492,20 @@ class PropertyTask(Base, TimestampMixin):
     journey_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("journeys.id", ondelete="CASCADE"), nullable=False
     )
-    property_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
+    property_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("properties.id", ondelete="CASCADE"), nullable=True
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    assignee_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Australia/Perth")
+    reminder_offset_minutes: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
     done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     row_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
@@ -557,7 +565,7 @@ INTAKE_MECHANISMS = ("structured_form", "url_with_facts", "pasted_text", "csv_im
 CSV_BATCH_STATES = ("pending", "processing", "completed", "partial", "failed")
 DUPLICATE_PROPOSAL_STATES = ("pending", "confirmed", "rejected", "undone")
 DUPLICATE_PROPOSAL_REASONS = ("exact_address_intake", "address_scan", "user_proposed")
-JOB_KINDS = ("brief_reevaluation", "source_health_check", "intake_processing", "report_release")
+JOB_KINDS = ("brief_reevaluation", "source_health_check", "intake_processing", "report_release", "reminder_processing")
 JOB_RUN_STATES = ("running", "completed", "failed", "skipped")
 ENRICHMENT_KINDS = ("planning", "constraint_layer", "notable_place", "travel")
 ENRICHMENT_CONFIDENCES = ("stated", "derived", "estimated", "unknown")
@@ -982,3 +990,122 @@ class ReportRun(Base, TimestampMixin):
     generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+# ── M5.1 Notifications, tasks and reminders ──────────────────────────────────
+NOTIFICATION_CATEGORIES = (
+    "new_property",
+    "material_property_change",
+    "price_change",
+    "inspection_change",
+    "evidence_gap",
+    "duplicate_review",
+    "task_assigned",
+    "task_due_soon",
+    "task_overdue",
+    "reminder",
+    "source_processing_failure",
+    "digest_ready",
+    "weekly_report_ready",
+    "monthly_report_ready",
+    "critical_service",
+)
+NOTIFICATION_PRIORITIES = ("low", "normal", "high", "critical")
+NOTIFICATION_CHANNELS = ("off", "in_app", "email", "both")
+DELIVERY_CHANNELS = ("in_app", "email")
+DELIVERY_STATES = ("pending", "delivered", "suppressed", "failed")
+TASK_PRIORITIES = ("low", "normal", "high")
+TASK_STATUSES = ("open", "completed")
+
+
+class NotificationEvent(Base, TimestampMixin):
+    """Deterministic workspace event. Its fingerprint is the idempotency boundary."""
+
+    __tablename__ = "notification_events"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "event_fingerprint", name="uq_notification_event_workspace_fingerprint"),
+        CheckConstraint(f"category in {NOTIFICATION_CATEGORIES!r}", name="ck_notification_event_category"),
+        CheckConstraint(f"priority in {NOTIFICATION_PRIORITIES!r}", name="ck_notification_event_priority"),
+        Index("ix_notification_events_workspace_created", "workspace_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    category: Mapped[str] = mapped_column(String(40), nullable=False)
+    event_fingerprint: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    safe_deep_link: Mapped[str] = mapped_column(String(500), nullable=False)
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
+    property_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("properties.id", ondelete="SET NULL"))
+    task_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("property_tasks.id", ondelete="SET NULL"))
+    source_event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("intake_events.id", ondelete="SET NULL"))
+    report_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("report_runs.id", ondelete="SET NULL"))
+    evidence_ref: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RecipientNotification(Base):
+    """A recipient's durable inbox state; events are never shared as read/dismissed state."""
+
+    __tablename__ = "recipient_notifications"
+    __table_args__ = (
+        UniqueConstraint("notification_event_id", "recipient_user_id", name="uq_recipient_notification_event_user"),
+        Index("ix_recipient_notifications_inbox", "workspace_id", "recipient_user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    notification_event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("notification_events.id", ondelete="CASCADE"), nullable=False)
+    recipient_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class NotificationDeliveryAttempt(Base):
+    """Channel delivery audit. Email rows are never created while no provider is connected."""
+
+    __tablename__ = "notification_delivery_attempts"
+    __table_args__ = (
+        UniqueConstraint("recipient_notification_id", "channel", "attempt_no", name="uq_notification_delivery_attempt"),
+        CheckConstraint(f"channel in {DELIVERY_CHANNELS!r}", name="ck_notification_delivery_channel"),
+        CheckConstraint(f"delivery_state in {DELIVERY_STATES!r}", name="ck_notification_delivery_state"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    recipient_notification_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("recipient_notifications.id", ondelete="CASCADE"), nullable=False)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    attempt_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    delivery_state: Mapped[str] = mapped_column(String(16), nullable=False, default="delivered")
+    detail: Mapped[str | None] = mapped_column(String(400))
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class NotificationPreference(Base, TimestampMixin):
+    """Requested and effective channel values stay separate for future provider activation."""
+
+    __tablename__ = "notification_preferences"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "user_id", "scope_key", name="uq_notification_preference_scope"),
+        CheckConstraint(f"requested_channel in {NOTIFICATION_CHANNELS!r}", name="ck_notification_pref_requested"),
+        CheckConstraint(f"effective_channel in {NOTIFICATION_CHANNELS!r}", name="ck_notification_pref_effective"),
+        Index("ix_notification_preferences_workspace_user", "workspace_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    scope_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    category: Mapped[str | None] = mapped_column(String(40))
+    requested_channel: Mapped[str] = mapped_column(String(16), nullable=False, default="in_app")
+    effective_channel: Mapped[str] = mapped_column(String(16), nullable=False, default="in_app")
+    in_app_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    quiet_hours_start: Mapped[str | None] = mapped_column(String(5))
+    quiet_hours_end: Mapped[str | None] = mapped_column(String(5))
+    timezone: Mapped[str | None] = mapped_column(String(64))
+    due_soon_minutes: Mapped[int | None] = mapped_column(Integer)
+    report_daily_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    report_weekly_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    report_monthly_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

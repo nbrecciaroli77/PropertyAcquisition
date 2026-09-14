@@ -10,6 +10,7 @@ const screens: [string, string][] = [
   ["/app/compare", "compare"],
   ["/app/saved", "saved"],
   ["/app/tasks", "tasks"],
+  ["/app/notifications", "notifications"],
   ["/app/agents", "agents"],
   ["/app/sources", "sources"],
   ["/app/settings", "settings"],

@@ -1,88 +1,46 @@
-import { CalendarPlus, CheckSquare, Square } from "lucide-react";
-import { useState } from "react";
+import { CalendarDays, CheckSquare, Pencil, Plus, Square, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../components/Button";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { MilestoneNote, PageHeader } from "../../components/Page";
-import { SourceFreshness } from "../../components/SourceFreshness";
-import { StatusChip } from "../../components/StatusChip";
-import { properties } from "../../lib/synthetic";
+import { PageHeader } from "../../components/Page";
+import { EmptyState, Skeleton } from "../../components/States";
+import { useAuth } from "../../lib/auth";
+import { propertyApi, type PropertySummary } from "../../lib/properties";
+import { taskApi, type Task, type TaskInput, type WorkspaceMember } from "../../lib/tasks";
+import { useJourneys } from "../../lib/journey";
 
-const tasks = [
-  { id: "t1", title: "Verify land size for 81C Sample Street", due: "Due Fri 21 Jun", propertyId: "demo-006", done: false, tone: "unknown" as const },
-  { id: "t2", title: "Confirm price guide for 22 Jarrah Road", due: "Due Sat 22 Jun", propertyId: "demo-004", done: false, tone: "warning" as const },
-  { id: "t3", title: "Read strata / title notes for 12 Banksia Crescent", due: "Done 18 Jun", propertyId: "demo-001", done: true, tone: "pass" as const },
-];
-
-const inspections = [
-  { id: "i1", propertyId: "demo-001", when: "Sat 22 Jun · 10:00–10:30 AWST", advertisedAt: "2026-06-18T07:42:00+08:00" },
-  { id: "i2", propertyId: "demo-005", when: "Sat 22 Jun · 11:15–11:45 AWST", advertisedAt: "2026-06-15T12:30:00+08:00" },
-];
+const blank = (timezone: string): TaskInput => ({ property_id: null, title: "", notes: null, assignee_user_id: null, priority: "normal", due_at: null, timezone, reminder_offset_minutes: 60 });
 
 export default function TasksPage() {
-  const [reminderNotice, setReminderNotice] = useState<string | null>(null);
-  return (
-    <>
-      <PageHeader eyebrow="Tasks" title="Inspections and tasks" description="Advertised open times are not confirmed attendance. Reminders never book anything." testId="tasks-header" />
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section aria-labelledby="inspections-heading" className="card p-5">
-          <h2 id="inspections-heading" className="text-h3 font-semibold">
-            Advertised open homes
-          </h2>
-          <ul className="mt-3 divide-y divide-border">
-            {inspections.map((i) => {
-              const p = properties.find((x) => x.id === i.propertyId)!;
-              return (
-                <li key={i.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between" data-testid={`inspection-${i.id}`}>
-                  <div>
-                    <div className="font-semibold">{p.address}</div>
-                    <div className="text-sm text-charcoal">{i.when}</div>
-                    <SourceFreshness className="mt-1" source={p.sourceLabel} checkedAt={i.advertisedAt} />
-                  </div>
-                  <ConfirmDialog
-                    title="Add a reminder?"
-                    description="This creates a calendar reminder for you only. It does not book, register or notify anyone — advertised times can change, so check the listing before you go."
-                    confirmLabel="Add reminder"
-                    onConfirm={() => setReminderNotice(`Reminder noted for ${p.address}. ICS download arrives in Milestone 5 — nothing was booked.`)}
-                    trigger={
-                      <Button variant="secondary" size="sm" icon={<CalendarPlus className="h-4 w-4" aria-hidden="true" />} data-testid={`add-reminder-${i.id}`}>
-                        Add reminder
-                      </Button>
-                    }
-                  />
-                </li>
-              );
-            })}
-          </ul>
-          {reminderNotice && (
-            <p role="status" className="mt-3 rounded-md bg-eucalyptus-soft px-3 py-2 text-sm text-eucalyptus-deep" data-testid="reminder-notice">
-              {reminderNotice}
-            </p>
-          )}
-        </section>
-
-        <section aria-labelledby="tasks-heading" className="card p-5">
-          <h2 id="tasks-heading" className="text-h3 font-semibold">
-            Tasks
-          </h2>
-          <ul className="mt-3 divide-y divide-border">
-            {tasks.map((t) => (
-              <li key={t.id} className="flex items-start gap-3 py-3" data-testid={`task-${t.id}`}>
-                {t.done ? <CheckSquare className="mt-0.5 h-5 w-5 text-eucalyptus-deep" aria-label="Done" /> : <Square className="mt-0.5 h-5 w-5 text-muted" aria-label="Not done" />}
-                <div className="min-w-0 flex-1">
-                  <div className={t.done ? "text-sm text-muted line-through" : "text-sm font-semibold"}>{t.title}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                    <StatusChip tone={t.tone}>{t.tone === "pass" ? "Done" : t.tone === "warning" ? "Verify" : "Unknown fact"}</StatusChip>
-                    {t.due}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
-
-      <MilestoneNote milestone={5}>Task ownership, ICS download after explicit action, and the notification centre with quiet hours arrive in Milestone 5.</MilestoneNote>
-    </>
-  );
+  const { active } = useJourneys();
+  const { me } = useAuth();
+  const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [properties, setProperties] = useState<PropertySummary[]>([]);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [form, setForm] = useState<TaskInput>(() => blank(me?.user.timezone ?? "Australia/Perth"));
+  const [editing, setEditing] = useState<Task | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = async () => { if (!active) return; try { const [list, props, people] = await Promise.all([taskApi.list(active.id), propertyApi.list(active.id), taskApi.members()]); setTasks(list); setProperties(props); setMembers(people); } catch (e) { setError(e instanceof Error ? e.message : "Tasks could not be loaded."); setTasks([]); } };
+  useEffect(() => { void load(); }, [active?.id]);
+  const formTitle = editing ? "Edit task" : "New task";
+  const submit = async (event: React.FormEvent) => { event.preventDefault(); if (!active || !form.title.trim()) return; setBusy(true); setError(null); try { if (editing) await taskApi.update(active.id, editing.id, { ...form, expected_row_version: editing.row_version }); else await taskApi.create(active.id, form); setEditing(null); setForm(blank(me?.user.timezone ?? "Australia/Perth")); await load(); } catch (e) { setError(e instanceof Error ? e.message : "Task could not be saved."); } finally { setBusy(false); } };
+  const activeTasks = useMemo(() => tasks?.filter((task) => !task.done) ?? [], [tasks]);
+  const completed = useMemo(() => tasks?.filter((task) => task.done) ?? [], [tasks]);
+  const change = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setForm((current) => ({ ...current, [key]: value }));
+  const edit = (task: Task) => { setEditing(task); setForm({ property_id: task.property_id, title: task.title, notes: task.notes, assignee_user_id: task.assignee_user_id, priority: task.priority, due_at: task.due_at ? task.due_at.slice(0, 16) : null, timezone: task.timezone, reminder_offset_minutes: task.reminder_offset_minutes }); };
+  return <>
+    <PageHeader eyebrow="Tasks" title="Tasks and reminders" description="Track due work and download calendar files yourself. Nothing books, contacts or sends on your behalf." testId="tasks-header" />
+    <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="min-w-0" data-testid="tasks-list-section">
+        {tasks === null && <Skeleton className="h-56" label="Loading tasks" />}
+        {error && <p role="alert" className="mb-4 rounded-md border border-risk/40 bg-risk-soft p-3 text-sm text-risk" data-testid="tasks-error">{error}</p>}
+        {tasks && activeTasks.length === 0 && <EmptyState icon={<CalendarDays className="h-6 w-6" />} title="No open tasks" description="Add a task when there is something to verify or prepare." data-testid="tasks-empty" />}
+        {tasks && <TaskList title="Open" tasks={activeTasks} journeyId={active?.id ?? ""} onComplete={async (task) => { if (active) { await taskApi.update(active.id, task.id, { expected_row_version: task.row_version, status: "completed" }); await load(); } }} onEdit={edit} onDelete={async (task) => { if (active) { await taskApi.remove(active.id, task.id, task.row_version); await load(); } }} />}
+        {tasks && completed.length > 0 && <TaskList title="Completed" tasks={completed} journeyId={active?.id ?? ""} onComplete={async (task) => { if (active) { await taskApi.update(active.id, task.id, { expected_row_version: task.row_version, status: "open" }); await load(); } }} onEdit={edit} onDelete={async (task) => { if (active) { await taskApi.remove(active.id, task.id, task.row_version); await load(); } }} />}
+      </section>
+      <section className="card h-fit p-5" aria-labelledby="task-form-heading" data-testid="task-form"><h2 id="task-form-heading" className="text-h3 font-semibold">{formTitle}</h2><form className="mt-4 space-y-3" onSubmit={(event) => void submit(event)}><label className="block text-sm font-semibold">Title<input value={form.title} onChange={(e) => change("title", e.target.value)} className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" data-testid="task-title-input" /></label><label className="block text-sm font-semibold">Related property<select value={form.property_id ?? ""} onChange={(e) => change("property_id", e.target.value || null)} className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" data-testid="task-property-select"><option value="">No related property</option>{properties.map((property) => <option key={property.id} value={property.id}>{property.address_line}, {property.suburb}</option>)}</select></label><label className="block text-sm font-semibold">Notes<textarea value={form.notes ?? ""} onChange={(e) => change("notes", e.target.value || null)} className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm" rows={3} data-testid="task-notes-input" /></label><div className="grid grid-cols-2 gap-3"><label className="text-sm font-semibold">Priority<select value={form.priority} onChange={(e) => change("priority", e.target.value as TaskInput["priority"])} className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 text-sm" data-testid="task-priority-select"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option></select></label><label className="text-sm font-semibold">Assignee<select value={form.assignee_user_id ?? ""} onChange={(e) => change("assignee_user_id", e.target.value || null)} className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 text-sm" data-testid="task-assignee-select"><option value="">Me</option>{members.map((member) => <option key={member.id} value={member.id}>{member.display_name}</option>)}</select></label></div><label className="block text-sm font-semibold">Due date and local time<input type="datetime-local" value={form.due_at ?? ""} onChange={(e) => change("due_at", e.target.value || null)} className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" data-testid="task-due-input" /></label><label className="block text-sm font-semibold">Timezone<input value={form.timezone} onChange={(e) => change("timezone", e.target.value)} className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" data-testid="task-timezone-input" /></label><label className="block text-sm font-semibold">Reminder offset<select value={form.reminder_offset_minutes ?? ""} onChange={(e) => change("reminder_offset_minutes", e.target.value ? Number(e.target.value) : null)} className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm" data-testid="task-reminder-offset-select"><option value="">No reminder</option><option value="15">15 minutes</option><option value="60">1 hour</option><option value="1440">1 day</option></select></label><div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || !form.title.trim()} icon={<Plus className="h-4 w-4" />} data-testid="task-save-button">{busy ? "Saving…" : editing ? "Save task" : "Add task"}</Button>{editing && <Button type="button" variant="tertiary" onClick={() => { setEditing(null); setForm(blank(me?.user.timezone ?? "Australia/Perth")); }} data-testid="task-cancel-edit">Cancel</Button>}</div></form></section>
+    </div>
+  </>;
 }
+
+function TaskList({ title, tasks, journeyId, onComplete, onEdit, onDelete }: { title: string; tasks: Task[]; journeyId: string; onComplete: (task: Task) => Promise<void>; onEdit: (task: Task) => void; onDelete: (task: Task) => Promise<void> }) { return <section className="mb-7" aria-label={`${title} tasks`}><h2 className="mb-3 text-h3 font-semibold">{title}</h2><ul className="divide-y divide-border border-y border-border bg-surface">{tasks.map((task) => <li key={task.id} className="flex gap-3 p-4" data-testid={`task-${task.id}`}><button type="button" onClick={() => void onComplete(task)} aria-label={task.done ? `Reopen ${task.title}` : `Complete ${task.title}`} className="mt-0.5 text-eucalyptus-deep" data-testid={`task-toggle-${task.id}`}>{task.done ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-muted" />}</button><div className="min-w-0 flex-1"><p className={`font-semibold ${task.done ? "text-muted line-through" : ""}`}>{task.title}</p>{task.notes && <p className="mt-1 text-sm text-charcoal">{task.notes}</p>}<p className="mt-1 text-xs text-muted">{task.due_at ? `Due ${new Date(task.due_at).toLocaleString()} · ${task.timezone}` : "No due date"}{task.property_address ? ` · ${task.property_address}` : ""}</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="tertiary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => onEdit(task)} data-testid={`task-edit-${task.id}`}>Edit</Button>{task.due_at && <a href={taskApi.calendarUrl(journeyId, task.id)} className="inline-flex h-9 items-center gap-1.5 text-sm font-semibold text-eucalyptus-deep hover:underline" data-testid={`task-ics-${task.id}`}><CalendarDays className="h-3.5 w-3.5" />ICS</a>}<Button size="sm" variant="tertiary" icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => void onDelete(task)} data-testid={`task-delete-${task.id}`}>Delete</Button></div></div></li>)}</ul></section>; }

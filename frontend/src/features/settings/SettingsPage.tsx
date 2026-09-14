@@ -10,6 +10,7 @@ import { authApi, type SessionOut } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { TIMEZONE_OPTIONS } from "../../lib/briefOptions";
 import { formatDate } from "../../lib/format";
+import { NotificationSettings } from "./NotificationSettings";
 
 export default function SettingsPage() {
   const { me, reload, signOutEverywhere } = useAuth();
@@ -184,22 +185,7 @@ export default function SettingsPage() {
           </p>
         </section>
 
-        <section aria-labelledby="notif-heading" className="card min-w-0 p-5">
-          <h2 id="notif-heading" className="text-h3 font-semibold">
-            Notifications
-          </h2>
-          <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)]">
-            <dt className="text-muted">Daily digest</dt>
-            <dd className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span>07:00 {me?.user.timezone}</span>
-              <StatusChip tone="neutral">Delivery not configured</StatusChip>
-            </dd>
-            <dt className="text-muted">Quiet hours</dt>
-            <dd>21:00–07:00</dd>
-            <dt className="text-muted">Outbox</dt>
-            <dd>Messages are stored and suppressed — nothing is delivered</dd>
-          </dl>
-        </section>
+        <NotificationSettings />
 
         <section aria-labelledby="privacy-heading" className="card min-w-0 p-5">
           <h2 id="privacy-heading" className="text-h3 font-semibold">

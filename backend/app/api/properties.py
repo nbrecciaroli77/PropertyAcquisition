@@ -727,6 +727,7 @@ async def add_task(
             journey_id=journey.id,
             property_id=prop.id,
             title=body.title.strip(),
+            status="open",
             created_by=auth.user.id,
         )
     )
@@ -761,6 +762,7 @@ async def update_task(
     check_row_version(task.row_version, body.expected_row_version, "task")
     task.done = body.done
     task.done_at = now_utc() if body.done else None
+    task.status = "completed" if body.done else "open"
     task.row_version += 1
     _log(
         db,

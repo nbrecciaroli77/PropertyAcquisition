@@ -11,6 +11,10 @@ load_dotenv()
 from app.db.base import dispose_engine, get_engine  # noqa: E402
 
 TABLES = (
+    "notification_delivery_attempts",
+    "recipient_notifications",
+    "notification_events",
+    "notification_preferences",
     "activity_events",
     "property_tasks",
     "property_notes",

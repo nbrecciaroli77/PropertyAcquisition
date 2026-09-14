@@ -1,7 +1,7 @@
 # IDEA-010 Property Acquisition — Product requirements and status
 
 Working name: "Property Acquisition" (working concept, not final). Gate: **initial private prototype**.
-Last updated: 14 September 2026 (Prompt 04.2 acceptance verified — checkpoint/m4-2-verified).
+Last updated: 14 September 2026 (Prompt 05.1 complete — checkpoint/m5-1-notifications-reminders).
 
 ## Execution state
 
@@ -12,7 +12,8 @@ Last updated: 14 September 2026 (Prompt 04.2 acceptance verified — checkpoint/
 | **03A** | Post-M3 foundation alignment — connector catalog, source readiness, sender aliases, discovery/intake attribution, scheduler observability, enrichment records, report-run metadata | **Complete** — `checkpoint/m3a-foundation-alignment` |
 | **04.1** | Manual property intake (structured form, URL + facts, pasted text), durable IntakeEvent, workspace-scoped idempotency, exact-address duplicate detection, deterministic text parser v1.0 | **Complete** — tested 12/12 scenarios |
 | **04.2** | CSV intake (preview, server-authoritative re-parse, formula-injection protection), duplicate review (merge/split/undo, 81A/C warning, snapshot-based undo), sources & coverage screen (all required fields, read-only, synthetic), sender-alias review (demo workspace only) | **Verified** — `checkpoint/m4-2-verified` |
-| **MVP Ops** | Notifications, channel preferences, reminders/ICS, digest/report previews, essential account/privacy functions | **Next** |
+| **05.1** | Durable in-app notification domain, task CRUD/reminders, preferences, manual-only processing and local ICS export | **Complete** — `checkpoint/m5-1-notifications-reminders` |
+| **05.2** | Digest/report previews plus essential privacy, export and deletion functions | **Next** |
 | **Production Hardening** | Security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Backlog** |
 
 ## Original problem statement (owner's brief)
@@ -72,7 +73,8 @@ Owner amendments that govern the whole build:
 | 3A | Post-M3 foundation alignment (connector, readiness, aliases, discovery, intake, scheduler, enrichment, reports) | **Done** — checkpoint `checkpoint/m3a-foundation-alignment` |
 | 4.1 | Manual property intake (structured form, URL + facts, paste), IntakeEvent, idempotency, duplicate detection | **Done** — `checkpoint/m4-1-manual-intake` |
 | 4.2 | CSV intake, duplicate review (merge/split/undo, unit-suffix warning), sources & coverage (all fields, read-only), sender-alias review (demo only) | **Verified** — `checkpoint/m4-2-verified` |
-| MVP Ops | Notifications, channel preferences, reminders/ICS, digest/report previews, essential account/privacy functions | **Planned — Next** |
+| 5.1 | In-app notification centre/settings, task management, deterministic reminders and ICS download | **Complete** — `checkpoint/m5-1-notifications-reminders` |
+| 5.2 | Digest/report previews plus essential privacy, export and deletion functions | **Planned — Next** |
 | Hardening | Security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Planned** |
 
 ### Milestone 1 — delivered (June 2026)
@@ -162,6 +164,26 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
   **53/53 passed**; `yarn typecheck` and production `yarn build` both passed.
 - Minimal verification-only correction: updated the stale shell navigation expectation to include the
   already-delivered Duplicate Review route. No application behavior changed.
+
+### M5.1 notifications, tasks, reminders and ICS — 14 September 2026
+
+- Added additive revisions `e9f3b2c1d7a4` (notification/task domain) and `f4a8c6d2e1b9`
+  (manual reminder job constraint); current sole Alembic head is `f4a8c6d2e1b9`.
+- Added durable workspace-scoped notification events, recipient inbox state, in-app delivery audit and
+  requested/effective preferences. Every event uses an idempotent workspace fingerprint and deterministic
+  delivery only; Email/Both remain visible but disabled/rejected with no provider connected.
+- Added task create/view/edit/complete/reopen/delete with workspace checks, optional property links,
+  assignee validation, optimistic concurrency and audit activity. The manual-only reminder processor
+  records disabled scheduled-job/job-run observability and handles due-soon, overdue and explicit reminders.
+- Added local individual-task ICS download with stable UID, IANA timezone, due time, description/property,
+  internal application URL and generation stamp. It makes no calendar, booking, contact or network action.
+- Seeded notification/task examples exclusively for the labelled demo workspace. Fresh workspaces retain
+  empty notifications and task lists.
+- Verification: M5.1 focused backend **6/6 passed** after one forward-only check-constraint correction;
+  affected backend regression evidence **29/29 passed**; focused frontend M5.1 rerun **2/2 passed**;
+  production TypeScript build and typecheck passed. Targeted desktop and iPhone inbox smoke flows passed.
+- No email, calendar provider, push, external API or production scheduler was added or invoked. Existing
+  Supabase data was only migrated additively; no reset, downgrade or destructive operation occurred.
 
 - Backend: `tests/test_auth.py`, `test_rate_limit.py`, `test_tenancy.py`, `test_brief.py`, `test_system.py`,
   `test_matching.py`, `test_properties.py`, `test_security_dev_surface.py`, `test_m3a_foundation.py`,

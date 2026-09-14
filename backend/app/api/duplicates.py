@@ -148,9 +148,21 @@ async def scan_duplicates(
                 continue
             seen.add(pair)
             try:
-                await create_proposal(
+                proposal = await create_proposal(
                     db, auth.workspace.id, p_a.id, p_b.id, "address_scan",
                     {"street_number": num_a},
+                )
+                from app.services.notifications import create_notification_event
+                await create_notification_event(
+                    db,
+                    workspace_id=auth.workspace.id,
+                    category="duplicate_review",
+                    fingerprint=f"duplicate:{proposal.id}:review",
+                    title="Duplicate review needed",
+                    message=f"Review the possible match between {p_a.address_line} and {p_b.address_line}.",
+                    safe_deep_link="/app/duplicates",
+                    property_id=proposal.property_id_a,
+                    evidence_ref={"proposal_id": str(proposal.id), "street_number": num_a},
                 )
                 created += 1
             except Exception:
