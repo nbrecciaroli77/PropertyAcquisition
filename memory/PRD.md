@@ -1,7 +1,7 @@
 # IDEA-010 Property Acquisition — Product requirements and status
 
 Working name: "Property Acquisition" (working concept, not final). Gate: **initial private prototype**.
-Last updated: 17 September 2026 (Prompt 06.1 complete — checkpoint/m6-1-product-alignment).
+Last updated: 14 September 2026 (Prompt 06.2 complete — checkpoint/m6-2-private-mvp-live).
 
 ## Execution state
 
@@ -15,7 +15,7 @@ Last updated: 17 September 2026 (Prompt 06.1 complete — checkpoint/m6-1-produc
 | **05.1** | Durable in-app notification domain, task CRUD/reminders, preferences, manual-only processing and local ICS export | **Complete** — `checkpoint/m5-1-notifications-reminders` |
 | **05.2** | Digest/report previews plus essential privacy, export and deletion functions | **Complete** — `checkpoint/m5-2-reports-privacy` |
 | **06.1** | Pre-deployment product alignment — locked report identities, presentation contract, producer/delivery separation, schedule model (disabled), execution telemetry, source rights metadata, manual inspection feedback | **Complete** — `checkpoint/m6-1-product-alignment` |
-| **06.2** | Production hardening and deployment — security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Backlog — awaiting user approval to start** |
+| **06.2** | Production hardening and deployment — security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Complete** — `checkpoint/m6-2-private-mvp-live` |
 
 ## Original problem statement (owner's brief)
 
@@ -284,3 +284,48 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
   end-to-end for both the fresh run and the backfilled historical run: **100% pass, no remaining issues.**
 - No external integration, live email delivery, or activated scheduled job was added — all strict constraints held.
 - Checkpoint: `checkpoint/m6-1-product-alignment`.
+
+
+### M6.2 Private MVP production hardening — 14 September 2026
+
+- `APP_ENV=production`, `SIGNUP_ENABLED=false`, `DEV_ROUTES_ENABLED=false` set in `backend/.env`.
+- Security headers middleware in `app/main.py`: CSP (compatible with Google Fonts), `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Permissions-Policy: camera=(), microphone=(), geolocation=()`. All responses include security headers.
+  Sensitive endpoints (`/api/auth/*`, `/api/exports/*`) enforce `Cache-Control: no-store, private`.
+- Production error handler: unhandled exceptions return correlation ID + generic message with no stack trace, SQL or path.
+- Removed "development outbox" references: `VERIFICATION_PENDING_MESSAGE` and `forgot-password` response now say
+  "Email delivery is not yet active — contact the workspace administrator".
+- Signup gate: `POST /api/auth/signup` returns `403 signup_disabled` when `SIGNUP_ENABLED=false`.
+  Frontend `SignUpPage.tsx` detects this and renders a "Private MVP — access by invitation" screen.
+  `tests/conftest.py` sets `SIGNUP_ENABLED=true` via `os.environ.setdefault` so all existing tests pass.
+- Owner bootstrap script: `scripts/bootstrap_owner.py` — reads `OWNER_EMAIL` and `OWNER_PASSWORD` from env,
+  creates/verifies the owner account idempotently, resets demo account passwords to random opaque values,
+  records an audit event, never logs the password. Not reachable from any public API. Exit 1 on missing creds.
+- Seed guard: `scripts/seed.py` refuses to run when `APP_ENV=production`.
+- `/api/readiness` endpoint (distinct from `/api/health`): returns 200/`ready` or 503/`not_ready` based on DB ping.
+  `/api/health` now returns HTTP 503 when DB is unavailable (was always returning 200).
+  `/api/meta` now exposes `signup_enabled` field.
+- `pool_pre_ping=True` on the SQLAlchemy engine for connection resilience.
+- Export download: `Cache-Control: no-store, private` + `X-Content-Type-Options: nosniff` headers.
+- MVP status authenticated disclosure: Settings page (`/app/settings`) has a "Private MVP status" section listing
+  Working features and Not-yet-connected features. One concise disclosure, not repeated on primary screens.
+- TypeScript fix: `src/__tests__/components.test.tsx` mock `p81c` was missing M6.1 inspection fields.
+  `yarn tsc --noEmit` now clean.
+- No new Alembic migration needed. Sole head remains `c8d5e2f9a4b1`.
+- No external integration, live email delivery, scheduler, AI service, or payment service was enabled.
+- Checkpoint: `checkpoint/m6-2-private-mvp-live` · commit `908bb6c`.
+
+**Owner bootstrap instructions (post-deployment, one-time):**
+```bash
+cd /app/backend
+OWNER_EMAIL=<your-email> OWNER_PASSWORD=<strong-password> python -m scripts.bootstrap_owner
+```
+This creates/verifies your account and locks all demo accounts. Credentials are not logged.
+
+**Rollback:** Use "Save to Github" + Emergent rollback feature to any previous commit/checkpoint.
+Application code rollback reverts to prior checkpoint. Database: Supabase manages backups; no schema downgrade
+is needed (all migrations are additive, no destructive changes in M6.2).
+
+**Backup/recovery note:** Supabase Free plan provides daily backups with 1-day retention (upgradeable).
+Point-in-time recovery requires a Pro or higher plan. Configure in the Supabase dashboard → Settings → Backups.
