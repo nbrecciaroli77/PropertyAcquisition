@@ -1,7 +1,7 @@
 # IDEA-010 Property Acquisition — Product requirements and status
 
 Working name: "Property Acquisition" (working concept, not final). Gate: **initial private prototype**.
-Last updated: 14 September 2026 (Prompt 04.2 complete — checkpoint/m4-2-intake-review).
+Last updated: 14 September 2026 (Prompt 04.2 acceptance verified — checkpoint/m4-2-verified).
 
 ## Execution state
 
@@ -11,7 +11,7 @@ Last updated: 14 September 2026 (Prompt 04.2 complete — checkpoint/m4-2-intake
 | Security hotfix | `/api/dev/*` deny-by-default, outbox purge, token invalidation | **Complete** — `checkpoint/security-public-dev-surface` |
 | **03A** | Post-M3 foundation alignment — connector catalog, source readiness, sender aliases, discovery/intake attribution, scheduler observability, enrichment records, report-run metadata | **Complete** — `checkpoint/m3a-foundation-alignment` |
 | **04.1** | Manual property intake (structured form, URL + facts, pasted text), durable IntakeEvent, workspace-scoped idempotency, exact-address duplicate detection, deterministic text parser v1.0 | **Complete** — tested 12/12 scenarios |
-| **04.2** | CSV intake (preview, server-authoritative re-parse, formula-injection protection), duplicate review (merge/split/undo, 81A/C warning, snapshot-based undo), sources & coverage screen (all required fields, read-only, synthetic), sender-alias review (demo workspace only) | **Complete** — `checkpoint/m4-2-intake-review` |
+| **04.2** | CSV intake (preview, server-authoritative re-parse, formula-injection protection), duplicate review (merge/split/undo, 81A/C warning, snapshot-based undo), sources & coverage screen (all required fields, read-only, synthetic), sender-alias review (demo workspace only) | **Verified** — `checkpoint/m4-2-verified` |
 | **MVP Ops** | Notifications, channel preferences, reminders/ICS, digest/report previews, essential account/privacy functions | **Next** |
 | **Production Hardening** | Security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Backlog** |
 
@@ -71,7 +71,7 @@ Owner amendments that govern the whole build:
 | 3 | Property workspace, evidence and matching (gates, fit, coverage), waivers, notes/tasks/activity | **Done** — approved |
 | 3A | Post-M3 foundation alignment (connector, readiness, aliases, discovery, intake, scheduler, enrichment, reports) | **Done** — checkpoint `checkpoint/m3a-foundation-alignment` |
 | 4.1 | Manual property intake (structured form, URL + facts, paste), IntakeEvent, idempotency, duplicate detection | **Done** — `checkpoint/m4-1-manual-intake` |
-| 4.2 | CSV intake, duplicate review (merge/split/undo, unit-suffix warning), sources & coverage (all fields, read-only), sender-alias review (demo only) | **Done** — `checkpoint/m4-2-intake-review` |
+| 4.2 | CSV intake, duplicate review (merge/split/undo, unit-suffix warning), sources & coverage (all fields, read-only), sender-alias review (demo only) | **Verified** — `checkpoint/m4-2-verified` |
 | MVP Ops | Notifications, channel preferences, reminders/ICS, digest/report previews, essential account/privacy functions | **Planned — Next** |
 | Hardening | Security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Planned** |
 
@@ -146,6 +146,22 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
   "restore my edits" affordance after a brief version conflict; clear the IP lockout bucket from the UI.
 
 ## Test and verification status
+
+### M4.2 acceptance verification — 14 September 2026
+
+- Live migration state confirmed at sole head `a8d2e3f4b5c6`; M4.2 revision is
+  `a8d2e3f4b5c6` (parent `f3c9b21a5d8e`).
+- Disposable database suite: `test_m4_2_verification.py` **8/8 passed** — CSV preview/revalidation,
+  full-file and row idempotency, formula inertness/no fetch, duplicate actions and snapshot undo,
+  merge-cycle prevention, 81A/81C separation, first discovery, tenancy, concurrency, aliases and
+  dev-route protection.
+- Disposable database rollback suite: `test_m4_2_migration_rollback.py` **1/1 passed** — upgrade to
+  M4.2, downgrade to M4.1, then re-upgrade to the sole head. Live Supabase was queried read-only and
+  was never downgraded, reset or seeded.
+- Existing backend authentication/security regression: **16/16 passed**. Frontend Jest suite:
+  **53/53 passed**; `yarn typecheck` and production `yarn build` both passed.
+- Minimal verification-only correction: updated the stale shell navigation expectation to include the
+  already-delivered Duplicate Review route. No application behavior changed.
 
 - Backend: `tests/test_auth.py`, `test_rate_limit.py`, `test_tenancy.py`, `test_brief.py`, `test_system.py`,
   `test_matching.py`, `test_properties.py`, `test_security_dev_surface.py`, `test_m3a_foundation.py`,

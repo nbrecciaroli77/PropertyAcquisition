@@ -7,6 +7,7 @@ const authedRoutes: [string, string][] = [
   ["/app/journeys/new", "new-journey-header"],
   ["/app/discover", "discover-header"],
   ["/app/pipeline", "pipeline-header"],
+  ["/app/duplicates", "duplicates-header"],
   ["/app/compare", "compare-header"],
   ["/app/saved", "saved-header"],
   ["/app/tasks", "tasks-header"],
@@ -41,6 +42,7 @@ describe("authenticated shell", () => {
       "Brief",
       "Discover",
       "Pipeline",
+      "Duplicates",
       "Compare",
       "Saved",
       "Tasks",
@@ -78,7 +80,7 @@ describe("authenticated shell", () => {
   it("More hub lists the destinations missing from the bottom bar", async () => {
     renderAt("/app/more");
     const list = await screen.findByTestId("more-list");
-    ["Brief", "Pipeline", "Compare", "Tasks", "Agents", "Sources", "Settings"].forEach((l) =>
+    ["Brief", "Pipeline", "Duplicates", "Compare", "Tasks", "Agents", "Sources", "Settings"].forEach((l) =>
       expect(within(list).getByText(l)).toBeInTheDocument(),
     );
     expect(screen.getByTestId("more-sign-out")).toBeInTheDocument();
