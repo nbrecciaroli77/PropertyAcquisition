@@ -101,7 +101,6 @@ export function mockApi(overrides: Record<string, Handler> = {}): FetchStub {
     "/api/journeys/33333333-3333-3333-3333-333333333333/today": { body: TODAY_EMPTY },
     "/api/journeys/33333333-3333-3333-3333-333333333333/properties": { body: [] },
     "/api/journeys": { body: [JOURNEY] },
-    "/api/dev/outbox": { body: [] },
     ...overrides,
   };
   const keys = Object.keys(handlers).sort((a, b) => b.length - a.length);

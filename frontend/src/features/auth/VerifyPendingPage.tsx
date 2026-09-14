@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Button, ButtonLink } from "../../components/Button";
+import { Button } from "../../components/Button";
 import { FormNotice } from "../../components/Form";
 import { authApi } from "../../lib/api";
 import { AuthLayout } from "./AuthLayout";
@@ -49,21 +49,13 @@ export default function VerifyPendingPage() {
     >
       <div className="card space-y-4 p-5">
         <FormNotice tone="info" testId="delivery-suppressed-notice">
-          <strong className="font-semibold">No email is delivered in this prototype.</strong> Delivery is suppressed
-          because no transactional provider is configured. Your confirmation link is waiting in the development outbox.
+          <strong className="font-semibold">No email is delivered in this prototype.</strong>{" "}
+          Delivery is suppressed because no transactional provider is configured. Contact the
+          prototype owner to obtain your confirmation link.
         </FormNotice>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <ButtonLink
-            to={email ? `/dev/outbox?email=${encodeURIComponent(email)}` : "/dev/outbox"}
-            variant="success"
-            data-testid="open-outbox-link"
-          >
-            Open the development outbox
-          </ButtonLink>
-          <Button variant="secondary" onClick={reissue} disabled={busy || !email} data-testid="reissue-verification">
-            {busy ? "Preparing a new link…" : "Prepare a new link"}
-          </Button>
-        </div>
+        <Button variant="secondary" onClick={reissue} disabled={busy || !email} data-testid="reissue-verification">
+          {busy ? "Preparing a new link…" : "Prepare a new link"}
+        </Button>
         {notice && (
           <FormNotice tone="success" testId="verify-pending-notice">
             {notice}

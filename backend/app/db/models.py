@@ -19,6 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -527,3 +528,354 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+# ── M3A Foundation Alignment ───────────────────────────────────────────────────
+# Provider-neutral connector catalog, source readiness, sender-alias review,
+# discovery/intake attribution, scheduler observability, enrichment records and
+# report-run metadata.  No external integrations are activated.
+
+ACQUISITION_MECHANISMS = ("portal_api", "portal_scrape", "direct_api", "manual", "inbound_email")
+LICENCE_KINDS = ("none_required", "commercial", "licensed")
+LICENCE_STATES = ("not_required", "pending", "active", "suspended", "expired")
+CONNECTOR_READINESS_STATES = ("unconfigured", "ready", "degraded", "error", "kill_switch")
+SOURCE_READINESS_STATES = ("initialising", "ready", "degraded", "offline", "kill_switch")
+ALIAS_CONFIDENCES = ("verified", "high", "medium", "low")
+ALIAS_REVIEW_STATES = ("pending", "confirmed", "rejected")
+DISCOVERY_EVENT_TYPES = ("first_discovery", "channel_event")
+DISCOVERY_CHANNELS = ("portal", "email", "manual", "agent_referral", "direct")
+INTAKE_STATES = ("pending", "processing", "completed", "failed", "duplicate")
+JOB_KINDS = ("brief_reevaluation", "source_health_check", "intake_processing", "report_release")
+JOB_RUN_STATES = ("running", "completed", "failed", "skipped")
+ENRICHMENT_KINDS = ("planning", "constraint_layer", "notable_place", "travel")
+ENRICHMENT_CONFIDENCES = ("stated", "derived", "estimated", "unknown")
+REPORT_RUN_KINDS = ("preview", "on_demand", "production")
+REPORT_RELEASE_STATES = ("pending", "generating", "ready", "failed", "released")
+
+
+class ConnectorDefinition(Base, TimestampMixin):
+    """Global, system-managed provider catalog.  No workspace_id — workspaces activate
+    through ConnectorInstance only.  Workspace behaviour is never customised here."""
+
+    __tablename__ = "connector_definitions"
+    __table_args__ = (
+        UniqueConstraint("slug", name="uq_connector_definition_slug"),
+        CheckConstraint(
+            f"acquisition_mechanism in {ACQUISITION_MECHANISMS!r}",
+            name="ck_connector_acquisition_mechanism",
+        ),
+        CheckConstraint(f"licence_kind in {LICENCE_KINDS!r}", name="ck_connector_licence_kind"),
+        CheckConstraint(f"licence_state in {LICENCE_STATES!r}", name="ck_connector_licence_state"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    slug: Mapped[str] = mapped_column(String(80), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    acquisition_mechanism: Mapped[str] = mapped_column(String(24), nullable=False)
+    capabilities: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    jurisdiction_codes: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    licence_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    licence_state: Mapped[str] = mapped_column(String(16), nullable=False)
+    version: Mapped[str] = mapped_column(String(32), nullable=False)
+    kill_switch: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class ConnectorInstance(Base, TimestampMixin):
+    """Workspace-scoped activation of a ConnectorDefinition.
+    credential_ref is a reference key only — raw credentials are never stored here."""
+
+    __tablename__ = "connector_instances"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "definition_id", name="uq_connector_instance_workspace_definition"
+        ),
+        CheckConstraint(
+            f"readiness_state in {CONNECTOR_READINESS_STATES!r}",
+            name="ck_connector_instance_readiness_state",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    definition_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("connector_definitions.id", ondelete="RESTRICT"), nullable=False
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    consent_given_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consent_actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    credential_ref: Mapped[str | None] = mapped_column(String(200))
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    readiness_state: Mapped[str] = mapped_column(String(16), nullable=False, default="unconfigured")
+    health_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    health_detail: Mapped[str | None] = mapped_column(String(400))
+
+
+class SourceReadiness(Base, TimestampMixin):
+    """Service/source readiness per workspace-connector pair, separated from the
+    buyer's journey.  Tracks requested vs effective filters and deviation reason."""
+
+    __tablename__ = "source_readiness"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "connector_instance_id", name="uq_source_readiness_workspace_connector"
+        ),
+        CheckConstraint(
+            f"readiness_state in {SOURCE_READINESS_STATES!r}",
+            name="ck_source_readiness_state",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    connector_instance_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("connector_instances.id", ondelete="CASCADE"), nullable=False
+    )
+    readiness_state: Mapped[str] = mapped_column(String(16), nullable=False, default="initialising")
+    milestones: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    requested_filters: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    effective_filters: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    deviation_reason: Mapped[str | None] = mapped_column(String(400))
+    status_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SenderAlias(Base, TimestampMixin):
+    """Verified sender-alias review.  Primary contact (canonical_email) remains
+    separate from aliases.  display_names_seen is stored for reference only and
+    is never used as a matching key."""
+
+    __tablename__ = "sender_aliases"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "alias_email", name="uq_sender_alias_workspace_email"),
+        CheckConstraint(f"confidence in {ALIAS_CONFIDENCES!r}", name="ck_sender_alias_confidence"),
+        CheckConstraint(f"review_state in {ALIAS_REVIEW_STATES!r}", name="ck_sender_alias_review_state"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    canonical_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    alias_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    display_names_seen: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    evidence_label: Mapped[str] = mapped_column(String(200), nullable=False)
+    evidence_url: Mapped[str | None] = mapped_column(Text)
+    confidence: Mapped[str] = mapped_column(String(16), nullable=False, default="low")
+    review_state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+
+class DiscoveryEvent(Base):
+    """Discovery and ingestion attribution.  event_type='first_discovery' records the
+    first time a property was found; a partial unique index enforces exactly one
+    first_discovery per (workspace_id, property_id).  Subsequent channel events use
+    event_type='channel_event' and are stored in the same table without the uniqueness
+    constraint."""
+
+    __tablename__ = "discovery_events"
+    __table_args__ = (
+        CheckConstraint(f"event_type in {DISCOVERY_EVENT_TYPES!r}", name="ck_discovery_event_type"),
+        CheckConstraint(f"channel in {DISCOVERY_CHANNELS!r}", name="ck_discovery_channel"),
+        Index("ix_discovery_workspace_property", "workspace_id", "property_id"),
+        # Exactly one first_discovery per (workspace, property)
+        Index(
+            "uq_discovery_first_per_workspace_property",
+            "workspace_id",
+            "property_id",
+            unique=True,
+            postgresql_where=text("event_type = 'first_discovery'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    journey_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("journeys.id", ondelete="CASCADE"), nullable=False
+    )
+    property_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
+    )
+    event_type: Mapped[str] = mapped_column(String(20), nullable=False, default="first_discovery")
+    source_label: Mapped[str] = mapped_column(String(120), nullable=False)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    claim: Mapped[str | None] = mapped_column(String(200))
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    discovered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class IntakeEvent(Base):
+    """Durable, idempotent intake-processing record.  Prompt 04 reads and writes these.
+    idempotency_key is unique per workspace (not globally) so different workspaces may
+    derive identical keys from the same external source without colliding."""
+
+    __tablename__ = "intake_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "idempotency_key", name="uq_intake_event_workspace_key"
+        ),
+        CheckConstraint(f"channel in {DISCOVERY_CHANNELS!r}", name="ck_intake_event_channel"),
+        CheckConstraint(f"state in {INTAKE_STATES!r}", name="ck_intake_event_state"),
+        Index("ix_intake_events_workspace_journey", "workspace_id", "journey_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    journey_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("journeys.id", ondelete="CASCADE"), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    source_label: Mapped[str] = mapped_column(String(120), nullable=False)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    result_property_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("properties.id", ondelete="SET NULL")
+    )
+    error_detail: Mapped[str | None] = mapped_column(Text)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    first_attempted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_attempted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ScheduledJob(Base, TimestampMixin):
+    """Scheduler configuration record.  workspace_id is required for this prototype —
+    no system-wide nullable tenancy path.  enabled defaults to False; no scheduler
+    or background automation is activated by this migration."""
+
+    __tablename__ = "scheduled_jobs"
+    __table_args__ = (
+        CheckConstraint(f"job_kind in {JOB_KINDS!r}", name="ck_scheduled_job_kind"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    job_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    schedule_cron: Mapped[str] = mapped_column(String(80), nullable=False)
+    schedule_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="UTC")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class JobRun(Base):
+    """Individual job-execution observability record.  No scheduler is activated;
+    these rows would be written by the job runner when it exists."""
+
+    __tablename__ = "job_runs"
+    __table_args__ = (
+        CheckConstraint(f"run_state in {JOB_RUN_STATES!r}", name="ck_job_run_state"),
+        Index("ix_job_runs_job_started", "job_id", "started_at"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scheduled_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    run_state: Mapped[str] = mapped_column(String(16), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    failure_reason: Mapped[str | None] = mapped_column(String(400))
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class EnrichmentRecord(Base, TimestampMixin):
+    """Provider-neutral enrichment for planning, constraint layers, notable places and
+    travel.  Reuses VALUE_STATES for value_state.  Unique per (property, kind, source)."""
+
+    __tablename__ = "enrichment_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "property_id", "kind", "source_label", name="uq_enrichment_property_kind_source"
+        ),
+        CheckConstraint(f"kind in {ENRICHMENT_KINDS!r}", name="ck_enrichment_kind"),
+        CheckConstraint(
+            f"confidence in {ENRICHMENT_CONFIDENCES!r}", name="ck_enrichment_confidence"
+        ),
+        CheckConstraint(f"value_state in {VALUE_STATES!r}", name="ck_enrichment_value_state"),
+        Index("ix_enrichment_property", "property_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    property_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_label: Mapped[str] = mapped_column(String(120), nullable=False)
+    provenance: Mapped[str] = mapped_column(String(400), nullable=False)
+    confidence: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    freshness_days: Mapped[int | None] = mapped_column(Integer)
+    value_state: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class ReportRun(Base, TimestampMixin):
+    """Report-run/release metadata.  Distinguishes preview, on-demand and future
+    production releases.  idempotency_key is unique per workspace.  No email
+    delivery is performed."""
+
+    __tablename__ = "report_runs"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "idempotency_key", name="uq_report_run_workspace_key"),
+        CheckConstraint(f"kind in {REPORT_RUN_KINDS!r}", name="ck_report_run_kind"),
+        CheckConstraint(
+            f"release_state in {REPORT_RELEASE_STATES!r}", name="ck_report_run_release_state"
+        ),
+        Index("ix_report_runs_workspace_journey", "workspace_id", "journey_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    journey_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("journeys.id", ondelete="SET NULL")
+    )
+    brief_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("brief_versions.id", ondelete="SET NULL")
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="preview")
+    release_state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)

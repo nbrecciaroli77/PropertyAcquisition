@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Button, ButtonLink } from "../../components/Button";
+import { Button } from "../../components/Button";
 import { FormNotice, TextField } from "../../components/Form";
 import { authApi } from "../../lib/api";
 import { AuthLayout } from "./AuthLayout";
@@ -17,7 +17,7 @@ export default function ForgotPasswordPage() {
       const response = await authApi.forgotPassword(email.trim());
       setSent(response.message);
     } catch {
-      setSent("If that address has an account, a reset link is waiting in the development outbox.");
+      setSent("If that address has an account, a reset link has been prepared.");
     } finally {
       setBusy(false);
     }
@@ -50,19 +50,9 @@ export default function ForgotPasswordPage() {
           {busy ? "Preparing your link…" : "Prepare a reset link"}
         </Button>
         {sent && (
-          <>
-            <FormNotice tone="success" testId="forgot-password-notice">
-              {sent}
-            </FormNotice>
-            <ButtonLink
-              to={`/dev/outbox?email=${encodeURIComponent(email.trim())}`}
-              variant="secondary"
-              className="w-full"
-              data-testid="forgot-open-outbox"
-            >
-              Open the development outbox
-            </ButtonLink>
-          </>
+          <FormNotice tone="success" testId="forgot-password-notice">
+            {sent}
+          </FormNotice>
         )}
       </form>
     </AuthLayout>

@@ -13,14 +13,13 @@ describe("account screens", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it("verification pending states that delivery is suppressed and links to the outbox", () => {
+  it("verification pending states that delivery is suppressed and offers a re-issue button", () => {
     mockAnonymous();
     renderAt("/verify-pending?email=owner@propertyacquisition-demo.com");
     expect(screen.getByTestId("delivery-suppressed-notice")).toHaveTextContent(/no email is delivered/i);
-    expect(screen.getByTestId("open-outbox-link")).toHaveAttribute(
-      "href",
-      "/dev/outbox?email=owner%40propertyacquisition-demo.com",
-    );
+    // outbox link has been removed; the re-issue button must remain
+    expect(screen.queryByTestId("open-outbox-link")).not.toBeInTheDocument();
+    expect(screen.getByTestId("reissue-verification")).toBeInTheDocument();
   });
 
   it("a missing verification token is reported instead of pretending to succeed", async () => {
@@ -46,11 +45,13 @@ describe("account screens", () => {
     expect(fetchMock.calls.some((url) => url.includes("/auth/reset-password"))).toBe(false);
   });
 
-  it("the development outbox explains that nothing is delivered", async () => {
+  it("/dev/outbox serves the application 404 page — not a dev mailbox", async () => {
     mockAnonymous();
     renderAt("/dev/outbox");
-    expect(await screen.findByTestId("outbox-scope-notice")).toHaveTextContent(/disabled outside the development/i);
-    expect(await screen.findByTestId("outbox-empty")).toBeInTheDocument();
+    // The genuine NotFoundPage must render; the old OutboxPage must not
+    expect(await screen.findByTestId("not-found-page")).toBeInTheDocument();
+    expect(screen.queryByTestId("outbox-scope-notice")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("outbox-empty")).not.toBeInTheDocument();
   });
 
   it("settings lists sessions and offers sign out of all devices", async () => {

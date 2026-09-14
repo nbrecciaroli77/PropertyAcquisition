@@ -12,7 +12,6 @@ import VerifyPendingPage from "../features/auth/VerifyPendingPage";
 import VerifyEmailPage from "../features/auth/VerifyEmailPage";
 import ForgotPasswordPage from "../features/auth/ForgotPasswordPage";
 import ResetPasswordPage from "../features/auth/ResetPasswordPage";
-import OutboxPage from "../features/dev/OutboxPage";
 import NewJourneyPage from "../features/journeys/NewJourneyPage";
 import BriefPage from "../features/brief/BriefPage";
 import BriefLocationsPage from "../features/brief/BriefLocationsPage";
@@ -46,7 +45,6 @@ export const routes = [
       { path: "/verify-email", element: <VerifyEmailPage /> },
       { path: "/forgot-password", element: <ForgotPasswordPage /> },
       { path: "/reset-password", element: <ResetPasswordPage /> },
-      { path: "/dev/outbox", element: <OutboxPage /> },
       { path: "/about", element: <AboutPage /> },
       { path: "/terms", element: <LegalPage kind="terms" /> },
       { path: "/privacy", element: <LegalPage kind="privacy" /> },

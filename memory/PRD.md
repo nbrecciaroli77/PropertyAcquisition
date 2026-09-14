@@ -1,7 +1,16 @@
 # IDEA-010 Property Acquisition — Product requirements and status
 
 Working name: "Property Acquisition" (working concept, not final). Gate: **initial private prototype**.
-Last updated: 4 September 2026 (end of Milestone 2).
+Last updated: 14 September 2026 (Prompt 03A foundation alignment complete).
+
+## Execution state
+
+| Prompt | Scope | Status |
+|--------|-------|--------|
+| 00–03 | Foundation, design system, auth, tenancy, buying brief, property workspace | **Complete** |
+| Security hotfix | `/api/dev/*` deny-by-default, outbox purge, token invalidation | **Complete** — `checkpoint/security-public-dev-surface` |
+| **03A** | Post-M3 foundation alignment — connector catalog, source readiness, sender aliases, discovery/intake attribution, scheduler observability, enrichment records, report-run metadata; frontend `/dev/outbox` → genuine 404 | **Complete** — `checkpoint/m3a-foundation-alignment` |
+| **04** | Property gates and pipelines, Add property intake UI | **Next** |
 
 ## Original problem statement (owner's brief)
 
@@ -55,8 +64,9 @@ Owner amendments that govern the whole build:
 | Milestone | Scope | Status |
 | --- | --- | --- |
 | 1 | Foundation, design system, shell, 25 concept routes, synthetic fixtures | **Done** — approved by the owner |
-| 2 | Authentication, workspace and tenancy, guided setup, versioned buying brief | **Done** — approved by the owner; checkpoint `checkpoint/m2-accounts-brief` |
-| 3 | Property workspace, evidence and matching (gates, fit, coverage), waivers, notes/tasks/activity | **Done** — awaiting owner review (4 Sep 2026) |
+| 2 | Authentication, workspace and tenancy, guided setup, versioned buying brief | **Done** — approved; checkpoint `checkpoint/m2-accounts-brief` |
+| 3 | Property workspace, evidence and matching (gates, fit, coverage), waivers, notes/tasks/activity | **Done** — approved |
+| 3A | Post-M3 foundation alignment (connector, readiness, aliases, discovery, intake, scheduler, enrichment, reports) | **Done** — checkpoint `checkpoint/m3a-foundation-alignment` |
 | 4 | Property gates and pipelines, "Add property" intake UI | Planned |
 | 5 | Intake idempotency, reminders ("Add reminder") | Planned |
 | 6 | Tasks and digest via a durable outbox, household invitations, export and deletion, audit browsing | Planned |
@@ -135,13 +145,12 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
 ## Test and verification status
 
 - Backend: `tests/test_auth.py`, `test_rate_limit.py`, `test_tenancy.py`, `test_brief.py`, `test_system.py`,
-  `test_matching.py`, `test_properties.py`, `test_security_dev_surface.py`, plus QA-authored `backend_test.py`,
-  `test_m2_public.py`, `test_m2_retest.py`, `test_m3_public.py` — 182 tests, all passing.
-- Security hotfix applied (checkpoint/security-public-dev-surface): `/api/dev/*` routes now governed by
-  `DEV_ROUTES_ENABLED` env var (false by default); all outstanding auth tokens invalidated and outbox purged.
-- Frontend: 47 Jest tests (including axe checks), five-viewport Playwright sweep (1440, 1024, 412, 390, 320)
-  incl. property detail and match tab, and `e2e/workspace.spec.ts` (desktop) — all passing. Run Playwright
-  with `E2E_BASE_URL=<REACT_APP_BACKEND_URL> PW_CHROMIUM_PATH=/pw-browsers/chromium_headless_shell-1208/chrome-linux/headless_shell`.
-- Independent QA: `/app/test_reports/iteration_1.json` (M1), `iteration_2.json`/`iteration_3.json` (M2),
-  `iteration_4.json` (M3 consolidated cycle: backend 41/41, frontend all flows, one minor seed finding fixed).
+  `test_matching.py`, `test_properties.py`, `test_security_dev_surface.py`, `test_m3a_foundation.py`,
+  plus QA-authored `backend_test.py`, `test_m2_public.py`, `test_m2_retest.py`, `test_m3_public.py`.
+  **17 targeted M3A tests all pass.** 16 security+auth regression tests all pass.
+- Security hotfix in effect: `/api/dev/*` returns 404 when `DEV_ROUTES_ENABLED=false` (default).
+  Frontend `/dev/outbox` route removed; catch-all renders genuine `NotFoundPage`. Auth pages no longer
+  disclose dev-route paths.
+- Frontend: 7 `auth.test.tsx` Jest tests pass (updated for outbox link removal). `yarn build` clean.
+- Seed accounts preserved: `owner@`, `other@`, `lockout-drills@propertyacquisition-demo.com`.
 - Credentials for testing: `/app/memory/test_credentials.md`.
