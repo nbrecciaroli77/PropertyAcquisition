@@ -11,6 +11,8 @@ from sqlalchemy import delete, select, update
 # Enable dev routes for the in-process test runner BEFORE load_dotenv so that
 # the .env value (DEV_ROUTES_ENABLED=false) does not override this.
 os.environ.setdefault("DEV_ROUTES_ENABLED", "true")
+# Allow signup in test runs regardless of the production SIGNUP_ENABLED=false gate.
+os.environ.setdefault("SIGNUP_ENABLED", "true")
 
 load_dotenv()
 

@@ -58,6 +58,10 @@ class Settings:
     dev_routes_enabled: bool = field(
         default_factory=lambda: os.environ.get("DEV_ROUTES_ENABLED", "false").strip().lower() == "true"
     )
+    # Public sign-up gate: set to "false" for a private MVP with invitation-only access.
+    signup_enabled: bool = field(
+        default_factory=lambda: os.environ.get("SIGNUP_ENABLED", "true").strip().lower() != "false"
+    )
     flags: dict[str, FlagState] = field(default_factory=lambda: dict(DEFAULT_FLAGS))
 
     @property

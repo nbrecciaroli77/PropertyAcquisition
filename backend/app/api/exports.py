@@ -74,4 +74,12 @@ async def download_export(export_id: uuid.UUID, auth: AuthContext = Depends(get_
     await record_audit(db, action="export.downloaded", actor_user_id=auth.user.id, workspace_id=auth.workspace.id, subject=str(export.id))
     await db.commit()
     filename = f"property-acquisition-{export.export_type}-export.zip"
-    return Response(content=export.file_data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+    return Response(
+        content=export.file_data,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store, private",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

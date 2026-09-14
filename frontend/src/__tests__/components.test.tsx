@@ -61,6 +61,9 @@ const p81c: PropertySummary = {
   waived_criteria: [],
   allowed_transitions: ["shortlisted"],
   updated_at: "2026-06-01T00:00:00Z",
+  inspection_state: "not_inspected",
+  inspection_note: null,
+  inspection_recorded_at: null,
 };
 
 function fact(key: string, value: number | null): PropertySummary["facts"][string] {

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,22 +22,36 @@ class MetaResponse(BaseModel):
     milestone: int
     synthetic_data_only: bool
     email_delivery: str
+    signup_enabled: bool
     flags: dict[str, FlagState]
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health(db: AsyncSession = Depends(get_db)) -> HealthResponse:
+async def health(response: Response, db: AsyncSession = Depends(get_db)) -> HealthResponse:
     settings = get_settings()
     try:
         await db.execute(text("select 1"))
         database = "connected"
     except Exception:
         database = "unavailable"
+    if database != "connected":
+        response.status_code = 503
     return HealthResponse(
         status="ok" if database == "connected" else "degraded",
         milestone=settings.milestone,
         database=database,
     )
+
+
+@router.get("/readiness")
+async def readiness(response: Response, db: AsyncSession = Depends(get_db)) -> dict[str, str]:
+    """Readiness probe: returns 200 only when the database is reachable."""
+    try:
+        await db.execute(text("select 1"))
+        return {"status": "ready"}
+    except Exception:
+        response.status_code = 503
+        return {"status": "not_ready"}
 
 
 @router.get("/meta", response_model=MetaResponse)
@@ -50,5 +64,6 @@ def meta() -> MetaResponse:
         milestone=s.milestone,
         synthetic_data_only=s.synthetic_data_only,
         email_delivery="suppressed_no_provider",
+        signup_enabled=s.signup_enabled,
         flags=s.flags,
     )

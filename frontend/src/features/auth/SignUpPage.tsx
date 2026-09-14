@@ -13,6 +13,7 @@ export default function SignUpPage() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [signupDisabled, setSignupDisabled] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -29,7 +30,9 @@ export default function SignUpPage() {
       });
       navigate(`/verify-pending?email=${encodeURIComponent(email.trim())}`);
     } catch (error) {
-      if (error instanceof ApiError && error.fieldErrors.length > 0) {
+      if (error instanceof ApiError && error.status === 403 && error.message === "signup_disabled") {
+        setSignupDisabled(true);
+      } else if (error instanceof ApiError && error.fieldErrors.length > 0) {
         setErrors(Object.fromEntries(error.fieldErrors.map((e) => [e.field, e.message])));
         setFormError("Check the highlighted fields.");
       } else {
@@ -39,6 +42,36 @@ export default function SignUpPage() {
       setBusy(false);
     }
   };
+
+  if (signupDisabled) {
+    return (
+      <AuthLayout
+        eyebrow="Private MVP"
+        title="Access by invitation"
+        description="This workspace is not open for public registration."
+        testId="sign-up-page"
+        footer={
+          <Link to="/" className="font-semibold text-eucalyptus-deep hover:underline underline-offset-4" data-testid="sign-up-to-sign-in">
+            Back to sign in
+          </Link>
+        }
+      >
+        <div className="card space-y-4 p-5">
+          <FormNotice tone="info" testId="signup-disabled-notice">
+            <strong className="font-semibold">Private MVP — access by invitation only.</strong>{" "}
+            This application is in a controlled private phase. Contact the workspace owner or administrator to request access.
+          </FormNotice>
+          <p className="text-sm text-muted">
+            If you already have an account,{" "}
+            <Link to="/" className="font-semibold text-eucalyptus-deep hover:underline underline-offset-4">
+              sign in here
+            </Link>
+            .
+          </p>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout

@@ -49,9 +49,8 @@ export default function VerifyPendingPage() {
     >
       <div className="card space-y-4 p-5">
         <FormNotice tone="info" testId="delivery-suppressed-notice">
-          <strong className="font-semibold">No email is delivered in this prototype.</strong>{" "}
-          Delivery is suppressed because no transactional provider is configured. Contact the
-          prototype owner to obtain your confirmation link.
+          <strong className="font-semibold">Email delivery is not active in this release.</strong>{" "}
+          Contact the workspace owner or administrator to obtain your confirmation link.
         </FormNotice>
         <Button variant="secondary" onClick={reissue} disabled={busy || !email} data-testid="reissue-verification">
           {busy ? "Preparing a new link…" : "Prepare a new link"}

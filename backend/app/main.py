@@ -10,8 +10,25 @@ from starlette.responses import JSONResponse, Response
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logger = logging.getLogger(__name__)
 
 MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+# Paths where Cache-Control: no-store must be enforced.
+_NO_STORE_PREFIXES = ("/api/auth/", "/api/exports/", "/api/account/")
+
+# Content-Security-Policy compatible with the React SPA + Google Fonts.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com data:; "
+    "img-src 'self' data: blob:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'; "
+    "base-uri 'self';"
+)
 
 
 def create_app() -> FastAPI:
@@ -52,14 +69,35 @@ def create_app() -> FastAPI:
         cid = request.headers.get("x-correlation-id") or uuid.uuid4().hex
         origin = request.headers.get("origin")
         if request.method in MUTATING_METHODS and origin and not settings.allows_origin(origin):
-            logging.warning("rejected cross-origin write cid=%s origin=%s", cid, origin)
+            logger.warning("rejected cross-origin write cid=%s origin=%s", cid, origin)
             return JSONResponse(
                 {"detail": "Cross-origin request rejected"},
                 status_code=403,
                 headers={"x-correlation-id": cid},
             )
-        response: Response = await call_next(request)
+        try:
+            response: Response = await call_next(request)
+        except Exception:
+            logger.exception("unhandled error cid=%s path=%s", cid, request.url.path)
+            return JSONResponse(
+                {"detail": "An unexpected error occurred.", "reference": cid},
+                status_code=500,
+                headers={"x-correlation-id": cid},
+            )
+
+        # Security headers on every response.
         response.headers["x-correlation-id"] = cid
+        response.headers["x-content-type-options"] = "nosniff"
+        response.headers["x-frame-options"] = "DENY"
+        response.headers["referrer-policy"] = "strict-origin-when-cross-origin"
+        response.headers["permissions-policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["content-security-policy"] = _CSP
+
+        # Sensitive routes must not be cached by any intermediary.
+        path = request.url.path
+        if any(path.startswith(p) for p in _NO_STORE_PREFIXES):
+            response.headers["cache-control"] = "no-store, private"
+
         return response
 
     @app.on_event("shutdown")

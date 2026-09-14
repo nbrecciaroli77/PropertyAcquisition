@@ -204,6 +204,56 @@ export default function SettingsPage() {
         </section>
       </div>
 
+      <section aria-labelledby="mvp-status-heading" className="mt-6 card p-5" data-testid="mvp-status-section">
+        <h2 id="mvp-status-heading" className="text-h3 font-semibold">
+          Private MVP status
+        </h2>
+        <p className="mt-2 text-sm text-muted">
+          What is working in this private release and what is not yet connected.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-sm font-semibold text-eucalyptus-deep mb-2">Working</p>
+            <ul className="space-y-1 text-sm text-charcoal">
+              {[
+                "Accounts and private workspace",
+                "Versioned buying brief",
+                "Manual, URL-with-facts, pasted-text and CSV intake",
+                "Evidence, gate, fit and coverage evaluation",
+                "Property pipeline and duplicate review",
+                "Notes, tasks, reminders and ICS download",
+                "In-app notifications",
+                "Daily, weekly and monthly report previews",
+                "Export and deletion-request controls",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-eucalyptus-deep" aria-hidden="true" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-ochre-deep mb-2">Not yet connected</p>
+            <ul className="space-y-1 text-sm text-charcoal">
+              {[
+                "Automatic Gmail / email intake",
+                "Portal, social and web scanning",
+                "Email report delivery",
+                "Production scheduler",
+                "Live mapping, travel and planning enrichment",
+                "Native mobile applications",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-ochre" aria-hidden="true" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <MilestoneNote milestone={6}>
         Household invitations, audit browsing, retention automation and production deletion scheduling arrive in
         Milestone 6.

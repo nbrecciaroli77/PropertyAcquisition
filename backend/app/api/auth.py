@@ -45,8 +45,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 MAX_ACTIVE_SESSIONS = 10
 
 VERIFICATION_PENDING_MESSAGE = (
-    "Check your email to confirm your address. In this prototype no email is delivered — "
-    "open the development outbox to follow the link."
+    "Check your email to confirm your address. "
+    "Email delivery is not yet active — contact the workspace administrator to obtain your confirmation link."
 )
 
 
@@ -188,6 +188,11 @@ async def _me(db: AsyncSession, auth: AuthContext) -> MeResponse:
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 async def signup(body: SignupRequest, db: AsyncSession = Depends(get_db)) -> SignupResponse:
+    if not get_settings().signup_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="signup_disabled",
+        )
     email = body.email.strip().lower()
     existing = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
 
@@ -512,7 +517,10 @@ async def forgot_password(body: EmailRequest, db: AsyncSession = Depends(get_db)
         await db.commit()
     return {
         "status": "accepted",
-        "message": "If that address has an account, a reset link is waiting in the development outbox.",
+        "message": (
+            "If that address has an account, a password reset link has been prepared. "
+            "Email delivery is not yet active — contact the workspace administrator to obtain your reset link."
+        ),
     }
 
 

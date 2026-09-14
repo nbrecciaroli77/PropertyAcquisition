@@ -602,6 +602,13 @@ async def _seed_account(db: AsyncSession, spec: dict) -> None:
 
 
 async def main() -> None:
+    env = os.environ.get("APP_ENV", "development").strip().lower()
+    if env == "production":
+        print(
+            "ERROR: seed.py must not run in production (APP_ENV=production). "
+            "Use scripts/bootstrap_owner.py to provision the owner account."
+        )
+        return
     async with get_sessionmaker()() as db:
         await _seed_connectors(db)
         for spec in ACCOUNTS:
