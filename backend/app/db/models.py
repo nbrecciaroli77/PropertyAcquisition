@@ -278,6 +278,14 @@ class Property(Base, TimestampMixin):
     image_attribution: Mapped[str | None] = mapped_column(String(200))
     row_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    # Soft-merge support: set when this property is absorbed into another
+    merged_into_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("properties.id", ondelete="SET NULL")
+    )
+    merged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    merge_actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
 
 
 class ListingCampaign(Base, TimestampMixin):
@@ -545,7 +553,10 @@ ALIAS_REVIEW_STATES = ("pending", "confirmed", "rejected")
 DISCOVERY_EVENT_TYPES = ("first_discovery", "channel_event")
 DISCOVERY_CHANNELS = ("portal", "email", "manual", "agent_referral", "direct")
 INTAKE_STATES = ("pending", "processing", "completed", "failed", "duplicate", "requires_review")
-INTAKE_MECHANISMS = ("structured_form", "url_with_facts", "pasted_text")
+INTAKE_MECHANISMS = ("structured_form", "url_with_facts", "pasted_text", "csv_import")
+CSV_BATCH_STATES = ("pending", "processing", "completed", "partial", "failed")
+DUPLICATE_PROPOSAL_STATES = ("pending", "confirmed", "rejected", "undone")
+DUPLICATE_PROPOSAL_REASONS = ("exact_address_intake", "address_scan", "user_proposed")
 JOB_KINDS = ("brief_reevaluation", "source_health_check", "intake_processing", "report_release")
 JOB_RUN_STATES = ("running", "completed", "failed", "skipped")
 ENRICHMENT_KINDS = ("planning", "constraint_layer", "notable_place", "travel")
@@ -760,6 +771,9 @@ class IntakeEvent(Base):
     )
     review_reasons: Mapped[list[Any] | None] = mapped_column(JSONB)
     error_detail: Mapped[str | None] = mapped_column(Text)
+    batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("csv_import_batches.id", ondelete="SET NULL")
+    )
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     first_attempted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -771,6 +785,81 @@ class IntakeEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class CsvImportBatch(Base, TimestampMixin):
+    """Tracks a CSV file import.  batch_key ensures the same file+journey combination is
+    idempotent — replaying the identical file does not duplicate properties."""
+
+    __tablename__ = "csv_import_batches"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "batch_key", name="uq_csv_batch_workspace_key"),
+        CheckConstraint(f"state in {CSV_BATCH_STATES!r}", name="ck_csv_batch_state"),
+        Index("ix_csv_batches_workspace_journey", "workspace_id", "journey_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    journey_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("journeys.id", ondelete="CASCADE"), nullable=False
+    )
+    batch_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    filename: Mapped[str] = mapped_column(String(260), nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    created_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    matched_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    review_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DuplicateProposal(Base, TimestampMixin):
+    """Workspace-scoped duplicate candidate.  Never auto-merged.  All confirm/reject/undo
+    actions are audited.  property_id_a is the default primary (survivor); the user may
+    swap before confirming.  merge_snapshot stores moved record IDs for safe undo."""
+
+    __tablename__ = "duplicate_proposals"
+    __table_args__ = (
+        CheckConstraint(
+            f"state in {DUPLICATE_PROPOSAL_STATES!r}", name="ck_duplicate_proposal_state"
+        ),
+        CheckConstraint(
+            f"proposal_reason in {DUPLICATE_PROPOSAL_REASONS!r}",
+            name="ck_duplicate_proposal_reason",
+        ),
+        CheckConstraint("property_id_a <> property_id_b", name="ck_duplicate_no_self"),
+        Index("ix_duplicate_proposals_workspace", "workspace_id"),
+        Index(
+            "ix_duplicate_proposals_pair", "workspace_id", "property_id_a", "property_id_b"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    property_id_a: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("properties.id", ondelete="RESTRICT"), nullable=False
+    )
+    property_id_b: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("properties.id", ondelete="RESTRICT"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    proposal_reason: Mapped[str] = mapped_column(String(30), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    unit_suffix_warning: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    merge_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    review_reason: Mapped[str | None] = mapped_column(Text)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    row_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
 
 
 class ScheduledJob(Base, TimestampMixin):

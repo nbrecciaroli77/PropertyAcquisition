@@ -17,9 +17,14 @@ export default function PipelinePage() {
         description="Buyer workflow stages you own. A source status update can never move a property between these columns; open a property to change its stage."
         testId="pipeline-header"
         actions={
-          <ButtonLink to="/app/properties/add" variant="secondary" size="sm" data-testid="pipeline-add-property">
-            Add property
-          </ButtonLink>
+          <div className="flex gap-2">
+            <ButtonLink to="/app/duplicates" variant="secondary" size="sm" data-testid="pipeline-review-duplicates">
+              Review duplicates
+            </ButtonLink>
+            <ButtonLink to="/app/properties/add" variant="secondary" size="sm" data-testid="pipeline-add-property">
+              Add property
+            </ButtonLink>
+          </div>
         }
       />
       {status === "error" && <ErrorState description={message ?? "The pipeline could not be loaded."} onRetry={reload} />}

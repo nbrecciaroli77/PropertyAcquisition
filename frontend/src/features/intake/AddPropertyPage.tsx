@@ -1,6 +1,5 @@
-import { AlertTriangle, CheckCircle, ChevronRight, ClipboardList, Loader2, MapPin, Plus, Search } from "lucide-react";
+import { AlertTriangle, CheckCircle, ChevronRight, ClipboardList, FileSpreadsheet, Loader2, MapPin, Plus, Search } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import { Button, ButtonLink } from "../../components/Button";
 import { PageHeader } from "../../components/Page";
 import { useJourneys } from "../../lib/journey";
@@ -12,14 +11,16 @@ import {
   type ParsedFactsOut,
 } from "../../lib/intake";
 import { ApiError } from "../../lib/api";
+import { CsvTab } from "./CsvTab";
 
-type Tab = "structured" | "url" | "paste";
+type Tab = "structured" | "url" | "paste" | "csv";
 type Phase = "form" | "loading" | "result";
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "structured", label: "Enter address", icon: <MapPin className="h-4 w-4" /> },
   { key: "url", label: "Paste from web", icon: <Search className="h-4 w-4" /> },
   { key: "paste", label: "Paste listing text", icon: <ClipboardList className="h-4 w-4" /> },
+  { key: "csv", label: "Import CSV", icon: <FileSpreadsheet className="h-4 w-4" /> },
 ];
 
 const AU_STATES = ["WA", "SA", "NT", "QLD", "NSW", "ACT", "VIC", "TAS"];
@@ -291,7 +292,6 @@ function FactsSection({
 // ── Result display ────────────────────────────────────────────────────────────
 
 function ResultPanel({ result, onAddAnother }: { result: IntakeResult; onAddAnother: () => void }) {
-  const navigate = useNavigate();
   const propUrl = result.property_id
     ? `/app/properties/${result.property_id}`
     : result.duplicate_property_id
@@ -801,6 +801,8 @@ export default function AddPropertyPage() {
             <StructuredTab key={`s-${formKey}`} journeyId={active.id} onResult={handleResult} />
           ) : tab === "url" ? (
             <UrlTab key={`u-${formKey}`} journeyId={active.id} onResult={handleResult} />
+          ) : tab === "csv" ? (
+            <CsvTab key={`c-${formKey}`} journeyId={active.id} />
           ) : (
             <PasteTab key={`p-${formKey}`} journeyId={active.id} onResult={handleResult} />
           )}

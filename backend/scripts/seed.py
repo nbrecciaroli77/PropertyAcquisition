@@ -1,6 +1,8 @@
 """Idempotent synthetic seed. Run: `python -m scripts.seed` from /app/backend.
 
 Creates two independent workspaces so cross-tenant isolation can be demonstrated. No live data.
+Synthetic sender-alias fixtures are added ONLY to the explicitly-labelled demo/owner workspace.
+New real workspaces receive honest empty states.
 """
 
 import asyncio
@@ -14,7 +16,17 @@ load_dotenv()
 
 from app.core.security import hash_password, now_utc  # noqa: E402
 from app.db.base import dispose_engine, get_sessionmaker  # noqa: E402
-from app.db.models import BriefVersion, Journey, Membership, User, Workspace  # noqa: E402
+from app.db.models import (  # noqa: E402
+    BriefVersion,
+    ConnectorDefinition,
+    ConnectorInstance,
+    Journey,
+    Membership,
+    SenderAlias,
+    SourceReadiness,
+    User,
+    Workspace,
+)
 from app.schemas.brief import Area, BriefPayload, default_brief  # noqa: E402
 from app.services.properties import load_demo_properties, reevaluate_journey  # noqa: E402
 
@@ -25,14 +37,15 @@ ACCOUNTS = [
         "display_name": "Nick",
         "workspace": "Brecciaroli household",
         "journey": "Perth family home 2026",
+        "is_demo_workspace": True,  # synthetic fixtures seeded here only
     },
     {
-        # Used only for brute-force drills so the owner account is never locked out mid-demo.
         "email": os.environ.get("SEED_DRILL_EMAIL", "lockout-drills@propertyacquisition-demo.com"),
         "password": os.environ.get("SEED_DRILL_PASSWORD", "Prototype2026pass"),
         "display_name": "Lockout drills",
         "workspace": "Lockout drill household",
         "journey": "Drill journey",
+        "is_demo_workspace": False,
     },
     {
         "email": os.environ.get("SEED_OTHER_EMAIL", "other@propertyacquisition-demo.com"),
@@ -40,8 +53,324 @@ ACCOUNTS = [
         "display_name": "Other tenant",
         "workspace": "Second household",
         "journey": "Adelaide downsizer",
+        "is_demo_workspace": False,
     },
 ]
+
+# ── Connector catalogue (global, provider-neutral synthetic data) ─────────────
+# capabilities: flat list  |  jurisdiction_codes: separate list  |  licence_state: from LICENCE_STATES
+
+CONNECTOR_DEFINITIONS = [
+    {
+        "slug": "rea-realestate-au",
+        "display_name": "REA Group (realestate.com.au)",
+        "description": "Major Australian property portal. Synthetic — not connected.",
+        "acquisition_mechanism": "portal_api",
+        "capabilities": ["listings", "price_history", "agent_profiles"],
+        "jurisdiction_codes": ["WA", "NSW", "VIC", "QLD", "SA", "TAS", "ACT", "NT"],
+        "licence_kind": "commercial",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+    {
+        "slug": "domain-com-au",
+        "display_name": "Domain.com.au",
+        "description": "Second-largest Australian property portal. Synthetic — not connected.",
+        "acquisition_mechanism": "portal_api",
+        "capabilities": ["listings", "price_history", "suburb_profiles"],
+        "jurisdiction_codes": ["WA", "NSW", "VIC", "QLD", "SA", "TAS", "ACT", "NT"],
+        "licence_kind": "commercial",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+    {
+        "slug": "corelogic-au",
+        "display_name": "CoreLogic Australia",
+        "description": "National property analytics platform. Synthetic — not connected.",
+        "acquisition_mechanism": "direct_api",
+        "capabilities": ["avm", "sales_history", "ownership", "planning"],
+        "jurisdiction_codes": ["WA", "NSW", "VIC", "QLD", "SA", "TAS", "ACT", "NT"],
+        "licence_kind": "licensed",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+    {
+        "slug": "proptrack-rea",
+        "display_name": "PropTrack (REA Analytics)",
+        "description": "REA Group analytics arm. Synthetic — not connected.",
+        "acquisition_mechanism": "direct_api",
+        "capabilities": ["avm", "suburb_trends", "price_guidance"],
+        "jurisdiction_codes": ["WA", "NSW", "VIC", "QLD", "SA", "TAS", "ACT", "NT"],
+        "licence_kind": "commercial",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+    {
+        "slug": "reiwa-wa",
+        "display_name": "REIWA (Real Estate Institute of WA)",
+        "description": "WA-specific listing and sales data. Synthetic — not connected.",
+        "acquisition_mechanism": "portal_api",
+        "capabilities": ["listings", "sales_history", "rental_data"],
+        "jurisdiction_codes": ["WA"],
+        "licence_kind": "licensed",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+    {
+        "slug": "reiq-qld",
+        "display_name": "REIQ (Real Estate Institute of QLD)",
+        "description": "QLD-specific listing and market reports. Synthetic — not connected.",
+        "acquisition_mechanism": "portal_api",
+        "capabilities": ["listings", "market_reports"],
+        "jurisdiction_codes": ["QLD"],
+        "licence_kind": "licensed",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+    {
+        "slug": "reiv-vic",
+        "display_name": "REIV (Real Estate Institute of VIC)",
+        "description": "VIC auction clearance and listing data. Synthetic — not connected.",
+        "acquisition_mechanism": "portal_api",
+        "capabilities": ["listings", "clearance_rates"],
+        "jurisdiction_codes": ["VIC"],
+        "licence_kind": "licensed",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+    {
+        "slug": "pricefinder-au",
+        "display_name": "PriceFinder",
+        "description": "Property analytics and AVM service. Synthetic — not connected.",
+        "acquisition_mechanism": "direct_api",
+        "capabilities": ["sales_history", "avm", "suburb_analytics"],
+        "jurisdiction_codes": ["WA", "NSW", "VIC", "QLD", "SA"],
+        "licence_kind": "commercial",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+    {
+        "slug": "email-inbound",
+        "display_name": "Email Forwarding (Inbound)",
+        "description": "Inbound email alias for listing alerts. No mailbox connected.",
+        "acquisition_mechanism": "inbound_email",
+        "capabilities": ["listing_alerts", "agent_correspondence"],
+        "jurisdiction_codes": ["WA", "NSW", "VIC", "QLD", "SA", "TAS", "ACT", "NT"],
+        "licence_kind": "none_required",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+    {
+        "slug": "onthehouse-au",
+        "display_name": "OnTheHouse (REA subsidiary)",
+        "description": "Listed and sold price data. Synthetic — not connected.",
+        "acquisition_mechanism": "portal_scrape",
+        "capabilities": ["listings", "sold_prices"],
+        "jurisdiction_codes": ["WA", "NSW", "VIC", "QLD", "SA"],
+        "licence_kind": "commercial",
+        "licence_state": "not_required",
+        "version": "synthetic-1.0",
+    },
+]
+
+# ── Demo workspace connector instances (synthetic states for sources screen) ──
+# Seeded ONLY into the demo/owner workspace. New real workspaces start empty.
+
+DEMO_CONNECTOR_INSTANCES = [
+    {
+        "slug": "email-inbound",
+        "enabled": True,
+        "readiness_state": "unconfigured",
+        "health_detail": "No email alias configured yet — setup required",
+        "source_readiness": {
+            "readiness_state": "offline",
+            "requested_filters": {"jurisdictions": ["WA"], "keywords": ["listing alert", "price drop"]},
+            "effective_filters": {},
+            "deviation_reason": "No active mailbox — unable to apply requested jurisdiction or keyword filters",
+        },
+    },
+    {
+        "slug": "rea-realestate-au",
+        "enabled": False,
+        "readiness_state": "unconfigured",
+        "health_detail": "API credentials not configured. Contact REA Group for commercial access.",
+        "source_readiness": None,
+    },
+    {
+        "slug": "reiwa-wa",
+        "enabled": True,
+        "readiness_state": "unconfigured",
+        "health_detail": "Licensed API key required — contact REIWA for member access.",
+        "source_readiness": {
+            "readiness_state": "offline",
+            "requested_filters": {"jurisdictions": ["WA"], "property_types": ["house", "townhouse"]},
+            "effective_filters": {},
+            "deviation_reason": "API key absent — no data can be retrieved until licence is active",
+        },
+    },
+]
+
+# ── Synthetic sender-alias fixtures for demo workspace only ──────────────────
+# display_names_seen is a list stored for reference; never used as a matching key.
+
+DEMO_ALIAS_FIXTURES = [
+    {
+        "canonical_email": "nick@brecciaroli.com.au",
+        "alias_email": "nick.brecciaroli@realestate.com.au",
+        "display_names_seen": ["Nick Brecciaroli (REA notifications)"],
+        "evidence_label": "Synthetic: confirmed sender match via display name",
+        "evidence_url": None,
+        "confidence": "high",
+        "review_state": "confirmed",
+    },
+    {
+        "canonical_email": "nick@brecciaroli.com.au",
+        "alias_email": "swanvalley.alerts@realestate.com.au",
+        "display_names_seen": ["Swan Valley Alerts"],
+        "evidence_label": "Synthetic: display name does not identify the recipient",
+        "evidence_url": None,
+        "confidence": "medium",
+        "review_state": "pending",
+    },
+    {
+        "canonical_email": "nick@brecciaroli.com.au",
+        "alias_email": "crest.property.perth@gmail.com",
+        "display_names_seen": ["Crest Property Perth"],
+        "evidence_label": "Synthetic: email domain does not match canonical",
+        "evidence_url": None,
+        "confidence": "low",
+        "review_state": "pending",
+    },
+    {
+        "canonical_email": "nick@brecciaroli.com.au",
+        "alias_email": "info@crestproperty.com.au",
+        "display_names_seen": ["Crest Property Info"],
+        "evidence_label": "Synthetic: confirmed generic agency inbox — unrelated to buyer",
+        "evidence_url": None,
+        "confidence": "low",
+        "review_state": "rejected",
+    },
+]
+
+
+async def _seed_connectors(db: AsyncSession) -> None:
+    """Seed global connector definitions idempotently.
+    Also removes any stale rows whose slugs don't match the known catalogue."""
+    known_slugs = {defn["slug"] for defn in CONNECTOR_DEFINITIONS}
+    # Purge any orphan rows created by earlier broken seed runs
+    all_existing = (await db.execute(select(ConnectorDefinition))).scalars().all()
+    for row in all_existing:
+        if row.slug not in known_slugs:
+            await db.delete(row)
+    await db.flush()
+
+    for defn in CONNECTOR_DEFINITIONS:
+        existing = (
+            await db.execute(
+                select(ConnectorDefinition).where(ConnectorDefinition.slug == defn["slug"])
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            db.add(
+                ConnectorDefinition(
+                    slug=defn["slug"],
+                    display_name=defn["display_name"],
+                    acquisition_mechanism=defn["acquisition_mechanism"],
+                    licence_kind=defn["licence_kind"],
+                    licence_state=defn["licence_state"],
+                    version=defn["version"],
+                    kill_switch=False,
+                    capabilities=defn["capabilities"],
+                    jurisdiction_codes=defn["jurisdiction_codes"],
+                    description=defn.get("description"),
+                )
+            )
+    await db.flush()
+
+
+async def _seed_demo_aliases(db: AsyncSession, workspace_id: object) -> None:
+    """Add synthetic sender-alias fixtures ONLY to the demo workspace."""
+    for fixture in DEMO_ALIAS_FIXTURES:
+        existing = (
+            await db.execute(
+                select(SenderAlias).where(
+                    SenderAlias.workspace_id == workspace_id,
+                    SenderAlias.alias_email == fixture["alias_email"],
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            db.add(
+                SenderAlias(
+                    workspace_id=workspace_id,
+                    canonical_email=fixture["canonical_email"],
+                    alias_email=fixture["alias_email"],
+                    display_names_seen=fixture["display_names_seen"],
+                    evidence_label=fixture["evidence_label"],
+                    evidence_url=fixture.get("evidence_url"),
+                    confidence=fixture["confidence"],
+                    review_state=fixture["review_state"],
+                    first_seen_at=now_utc(),
+                )
+            )
+    await db.flush()
+
+
+async def _seed_demo_instances(db: AsyncSession, workspace_id: object, actor_id: object) -> None:
+    """Seed ConnectorInstance + SourceReadiness for the demo workspace only."""
+    for spec in DEMO_CONNECTOR_INSTANCES:
+        defn = (
+            await db.execute(
+                select(ConnectorDefinition).where(ConnectorDefinition.slug == spec["slug"])
+            )
+        ).scalar_one_or_none()
+        if defn is None:
+            continue
+
+        ci = (
+            await db.execute(
+                select(ConnectorInstance).where(
+                    ConnectorInstance.workspace_id == workspace_id,
+                    ConnectorInstance.definition_id == defn.id,
+                )
+            )
+        ).scalar_one_or_none()
+
+        if ci is None:
+            ci = ConnectorInstance(
+                workspace_id=workspace_id,
+                definition_id=defn.id,
+                enabled=spec["enabled"],
+                readiness_state=spec["readiness_state"],
+                health_detail=spec.get("health_detail"),
+                consent_actor_user_id=actor_id if spec["enabled"] else None,
+                consent_given_at=now_utc() if spec["enabled"] else None,
+            )
+            db.add(ci)
+            await db.flush()
+
+        sr_spec = spec.get("source_readiness")
+        if sr_spec:
+            sr = (
+                await db.execute(
+                    select(SourceReadiness).where(
+                        SourceReadiness.workspace_id == workspace_id,
+                        SourceReadiness.connector_instance_id == ci.id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if sr is None:
+                db.add(
+                    SourceReadiness(
+                        workspace_id=workspace_id,
+                        connector_instance_id=ci.id,
+                        readiness_state=sr_spec["readiness_state"],
+                        requested_filters=sr_spec["requested_filters"],
+                        effective_filters=sr_spec["effective_filters"],
+                        deviation_reason=sr_spec.get("deviation_reason"),
+                    )
+                )
+                await db.flush()
 
 
 def _seed_brief() -> BriefPayload:
@@ -71,7 +400,7 @@ def _seed_brief() -> BriefPayload:
     return BriefPayload.model_validate(brief.model_dump())
 
 
-async def _seed_account(db: AsyncSession, spec: dict[str, str]) -> None:
+async def _seed_account(db: AsyncSession, spec: dict) -> None:
     email = spec["email"].lower()
     user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
     if user is None:
@@ -175,6 +504,9 @@ async def _seed_account(db: AsyncSession, spec: dict[str, str]) -> None:
     for old in queued:
         await reevaluate_journey(db, journey, old, user.id)
     evaluated = await reevaluate_journey(db, journey, version, user.id)
+    if spec.get("is_demo_workspace"):
+        await _seed_demo_aliases(db, workspace.id)
+        await _seed_demo_instances(db, workspace.id, user.id)
     print(
         f"seeded {email} · workspace {workspace.name} · journey {journey.name} · "
         f"{created} fixture properties added · {evaluated} evaluated against brief v{version.version_no}"
@@ -183,6 +515,7 @@ async def _seed_account(db: AsyncSession, spec: dict[str, str]) -> None:
 
 async def main() -> None:
     async with get_sessionmaker()() as db:
+        await _seed_connectors(db)
         for spec in ACCOUNTS:
             await _seed_account(db, spec)
         await db.commit()

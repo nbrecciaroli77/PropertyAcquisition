@@ -16,10 +16,14 @@ MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 def create_app() -> FastAPI:
     from app.api.auth import router as auth_router
+    from app.api.csv_intake import router as csv_intake_router
     from app.api.dev import router as dev_router
+    from app.api.duplicates import router as duplicates_router
+    from app.api.aliases import router as aliases_router
     from app.api.intake import router as intake_router
     from app.api.journeys import router as journeys_router
     from app.api.properties import router as properties_router
+    from app.api.sources import router as sources_router
     from app.api.system import router as system_router
     from app.core.config import get_settings
     from app.db.base import dispose_engine
@@ -61,6 +65,10 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api")
     app.include_router(journeys_router, prefix="/api")
     app.include_router(properties_router, prefix="/api")
+    app.include_router(csv_intake_router, prefix="/api")   # must precede intake_router (avoids path collision)
     app.include_router(intake_router, prefix="/api")
+    app.include_router(duplicates_router, prefix="/api")
+    app.include_router(aliases_router, prefix="/api")
+    app.include_router(sources_router, prefix="/api")
     app.include_router(dev_router, prefix="/api")
     return app
