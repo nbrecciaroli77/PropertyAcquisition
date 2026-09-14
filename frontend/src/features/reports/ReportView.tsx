@@ -206,10 +206,22 @@ export function ReportView({ run }: { run: ReportRun }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <StatusChip tone="info" hideIcon data-testid="report-badge-preview">{run.kind === "production" ? "Production" : "Preview / test data"}</StatusChip>
-          <StatusChip tone={run.release_state === "ready" ? "pass" : run.release_state === "failed" ? "fail" : "unknown"} hideIcon data-testid="report-state">{run.release_state}</StatusChip>
+          <StatusChip
+            tone={run.release_state === "ready" || run.release_state === "ready_to_send" ? "pass" : run.release_state === "failed" ? "fail" : "unknown"}
+            hideIcon
+            data-testid="report-state"
+          >
+            {run.release_state === "ready_to_send" ? "Ready to send" : run.release_state}
+          </StatusChip>
         </div>
       </header>
 
+      {run.release_state === "ready_to_send" && (
+        <p className="mb-4 rounded-md border border-eucalyptus/40 bg-eucalyptus-soft px-3 py-2 text-sm text-eucalyptus-deep" data-testid="report-ready-to-send-note">
+          This snapshot is frozen as ready to send. Delivery is disabled in this prototype — no email will be sent.
+          {run.ready_to_send_at && <> Marked ready {new Date(run.ready_to_send_at).toLocaleString()}.</>}
+        </p>
+      )}
       {run.is_partial_period && (
         <p className="mb-4 rounded-md border border-ochre/40 bg-ochre-soft px-3 py-2 text-sm text-ochre-deep" data-testid="report-partial-period">
           Partial-period preview — the database does not yet contain a full period. Actual coverage starts {s.actual_coverage_start ? new Date(s.actual_coverage_start).toLocaleDateString() : "unknown"}.

@@ -15,7 +15,7 @@ from app.schemas.reports import (
     ReportRunOut,
 )
 from app.services.notifications import reject_email_channel
-from app.services.reports import generate_report
+from app.services.reports import generate_report, mark_ready_to_send
 
 router = APIRouter(tags=["reports"])
 
@@ -32,8 +32,8 @@ def _run_out(run: ReportRun) -> ReportRunOut:
         release_state=run.release_state, idempotency_key=run.idempotency_key, period_start=run.period_start,
         period_end=run.period_end, cutoff_at=run.cutoff_at, timezone=run.timezone,
         generation_version=run.generation_version, is_partial_period=run.is_partial_period,
-        failure_reason=run.failure_reason, generated_at=run.generated_at, snapshot=run.snapshot,
-        detail=run.detail, created_at=run.created_at,
+        failure_reason=run.failure_reason, generated_at=run.generated_at, ready_to_send_at=run.ready_to_send_at,
+        snapshot=run.snapshot, detail=run.detail, created_at=run.created_at,
     )
 
 
@@ -85,6 +85,30 @@ async def get_report(
     ).scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail="Report not found")
+    return _run_out(run)
+
+
+@router.post("/journeys/{journey_id}/reports/{report_run_id}/ready-to-send", response_model=ReportRunOut)
+async def ready_to_send(
+    journey_id: uuid.UUID, report_run_id: uuid.UUID, auth: AuthContext = Depends(get_auth), db: AsyncSession = Depends(get_db)
+) -> ReportRunOut:
+    """Marks an already-generated report as an immutable, ready-to-send snapshot.
+    This is the producer's boundary only — delivery stays fully disabled."""
+    require_writer(auth)
+    journey = await scoped_journey(journey_id, db, auth.workspace.id)
+    run = (
+        await db.execute(
+            select(ReportRun).where(ReportRun.id == report_run_id, ReportRun.workspace_id == journey.workspace_id, ReportRun.journey_id == journey.id)
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    try:
+        run = await mark_ready_to_send(db, run=run, actor_user_id=auth.user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await db.commit()
+    await db.refresh(run)
     return _run_out(run)
 
 

@@ -371,6 +371,9 @@ class Fact(Base, TimestampMixin):
     conflict_note: Mapped[str | None] = mapped_column(Text)
 
 
+INSPECTION_STATES = ("not_inspected", "feedback_pending", "great", "ok", "not_as_good")
+
+
 class BuyerProperty(Base, TimestampMixin):
     """Household workflow state for a property inside one journey. Separate from market state."""
 
@@ -378,6 +381,7 @@ class BuyerProperty(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("journey_id", "property_id", name="uq_buyer_property_journey"),
         CheckConstraint(f"buyer_state in {BUYER_STATES!r}", name="ck_buyer_state"),
+        CheckConstraint(f"inspection_state in {INSPECTION_STATES!r}", name="ck_buyer_property_inspection_state"),
         Index("ix_buyer_properties_workspace_journey", "workspace_id", "journey_id"),
     )
 
@@ -396,6 +400,12 @@ class BuyerProperty(Base, TimestampMixin):
     stage_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     stage_changed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     row_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Manual, human-entered inspection feedback. Never read by gate/fit/coverage scoring —
+    # see services/matching.py, which has no reference to these columns.
+    inspection_state: Mapped[str] = mapped_column(String(20), nullable=False, default="not_inspected")
+    inspection_note: Mapped[str | None] = mapped_column(Text)
+    inspection_recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    inspection_recorded_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
 
 class MatchEvaluation(Base):
@@ -571,7 +581,7 @@ JOB_RUN_STATES = ("running", "completed", "failed", "skipped")
 ENRICHMENT_KINDS = ("planning", "constraint_layer", "notable_place", "travel")
 ENRICHMENT_CONFIDENCES = ("stated", "derived", "estimated", "unknown")
 REPORT_RUN_KINDS = ("preview", "on_demand", "production")
-REPORT_RELEASE_STATES = ("pending", "generating", "ready", "failed", "released")
+REPORT_RELEASE_STATES = ("pending", "generating", "ready", "ready_to_send", "failed", "released")
 
 
 class ConnectorDefinition(Base, TimestampMixin):
@@ -600,6 +610,10 @@ class ConnectorDefinition(Base, TimestampMixin):
     licence_state: Mapped[str] = mapped_column(String(16), nullable=False)
     version: Mapped[str] = mapped_column(String(32), nullable=False)
     kill_switch: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Redistribution safety: whether data from this source may be shown beyond the
+    # buyer's own workspace (never used to enable any sharing feature in this build).
+    redistribution_allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    attribution_text: Mapped[str | None] = mapped_column(Text)
 
 
 class ConnectorInstance(Base, TimestampMixin):
@@ -1003,6 +1017,10 @@ class ReportRun(Base, TimestampMixin):
     snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Producer/delivery separation: an explicit, immutable "ready to send" snapshot.
+    # This never triggers delivery — no email/notification provider is contacted.
+    ready_to_send_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ready_to_send_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
 

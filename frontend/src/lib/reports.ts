@@ -18,6 +18,7 @@ export interface ReportRun {
   is_partial_period: boolean;
   failure_reason: string | null;
   generated_at: string | null;
+  ready_to_send_at: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   snapshot: Record<string, any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,6 +53,8 @@ export const reportApi = {
   list: (journeyId: string, reportType?: ReportType) =>
     apiFetch<ReportRun[]>(`/journeys/${journeyId}/reports${reportType ? `?report_type=${reportType}` : ""}`),
   get: (journeyId: string, reportRunId: string) => apiFetch<ReportRun>(`/journeys/${journeyId}/reports/${reportRunId}`),
+  markReadyToSend: (journeyId: string, reportRunId: string) =>
+    apiFetch<ReportRun>(`/journeys/${journeyId}/reports/${reportRunId}/ready-to-send`, { method: "POST" }),
   preferences: () => apiFetch<ReportPreferences>("/reports/preferences"),
   updatePreference: (
     reportType: ReportType,

@@ -26,6 +26,7 @@ from app.schemas.properties import (
     CampaignOut,
     EvaluationOut,
     FactOut,
+    InspectionChange,
     NoteCreate,
     NoteOut,
     NoteUpdate,
@@ -219,6 +220,9 @@ async def _summaries(
                 evaluation=_eval_out(evaluations.get(prop.id)),
                 waived_criteria=sorted(waived[prop.id]),
                 allowed_transitions=list(ALLOWED_TRANSITIONS[bp.buyer_state]),
+                inspection_state=bp.inspection_state,
+                inspection_note=bp.inspection_note,
+                inspection_recorded_at=bp.inspection_recorded_at,
                 updated_at=max(prop.updated_at, bp.updated_at),
             )
         )
@@ -568,6 +572,39 @@ async def set_saved(
         auth.user.id,
         "saved" if body.saved else "unsaved",
         "Saved to shortlist" if body.saved else "Removed from shortlist",
+    )
+    await db.commit()
+    await db.refresh(bp)
+    return await _detail(db, journey, prop, bp)
+
+
+@router.post("/properties/{property_id}/inspection", response_model=PropertyDetail)
+async def set_inspection(
+    journey_id: uuid.UUID,
+    property_id: uuid.UUID,
+    body: InspectionChange,
+    auth: AuthContext = Depends(get_auth),
+    db: AsyncSession = Depends(get_db),
+) -> PropertyDetail:
+    """Lightweight, manual, human-entered inspection feedback. Never read by the
+    matching engine — see services/matching.py, which has no reference to these fields."""
+    require_writer(auth)
+    journey = await scoped_journey(journey_id, db, auth.workspace.id)
+    prop, bp = await _scoped_property(db, journey, property_id)
+    check_row_version(bp.row_version, body.expected_row_version, "property")
+    bp.inspection_state = body.inspection_state
+    bp.inspection_note = (body.inspection_note or "").strip() or None
+    bp.inspection_recorded_at = now_utc()
+    bp.inspection_recorded_by = auth.user.id
+    bp.row_version += 1
+    _log(
+        db,
+        journey,
+        prop,
+        auth.user.id,
+        "inspection_feedback_recorded",
+        f"Recorded inspection feedback: {body.inspection_state.replace('_', ' ')}",
+        {"inspection_state": body.inspection_state},
     )
     await db.commit()
     await db.refresh(bp)

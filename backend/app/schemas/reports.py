@@ -35,6 +35,7 @@ class ReportRunOut(Strict):
     is_partial_period: bool
     failure_reason: str | None
     generated_at: datetime | None
+    ready_to_send_at: datetime | None
     snapshot: dict[str, Any]
     detail: dict[str, Any]
     created_at: datetime

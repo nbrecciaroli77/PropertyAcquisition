@@ -1,8 +1,8 @@
-import { Bookmark, CheckSquare, Scale, Square } from "lucide-react";
+import { Bookmark, CheckSquare, ClipboardCheck, Scale, Square } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../../components/Button";
 import { formatDate } from "../../lib/format";
-import { BUYER_STATES, buyerLabel, propertyApi, type PropertyDetail } from "../../lib/properties";
+import { BUYER_STATES, buyerLabel, INSPECTION_STATES, inspectionLabel, propertyApi, type PropertyDetail } from "../../lib/properties";
 import { useCompareSelection } from "../properties/hooks";
 
 interface Props {
@@ -74,6 +74,64 @@ export function Workflow({ p, busy, mutate }: Props) {
           <Square className="h-3.5 w-3.5" aria-hidden="true" /> Reminders and drafts arrive in Milestone 5.
         </li>
       </ul>
+    </section>
+  );
+}
+
+/** Lightweight, manual inspection feedback — never fed into gates, fit or coverage scoring. */
+export function InspectionFeedback({ p, busy, mutate }: Props) {
+  const [state, setState] = useState(p.inspection_state);
+  const [note, setNote] = useState(p.inspection_note ?? "");
+  const dirty = state !== p.inspection_state || note !== (p.inspection_note ?? "");
+  return (
+    <section aria-labelledby="inspection-feedback-heading" className="card p-5" data-testid="inspection-feedback-panel">
+      <h2 id="inspection-feedback-heading" className="flex items-center gap-1.5 text-h3 font-semibold">
+        <ClipboardCheck className="h-4 w-4 text-eucalyptus-deep" aria-hidden="true" /> Inspection feedback
+      </h2>
+      <p className="mt-1 text-sm text-muted">
+        Your own manual impression after a visit. It is never used in gates, fit or coverage scoring.
+      </p>
+      <form
+        className="mt-3 space-y-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void mutate(
+            (j) => propertyApi.setInspection(j, p.id, state, note.trim() || null, p.buyer_row_version),
+            "Inspection feedback saved.",
+          );
+        }}
+      >
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="label">Result</span>
+          <select value={state} onChange={(e) => setState(e.target.value)} className="h-10 rounded-md border border-border bg-surface px-2 text-sm" data-testid="inspection-state-select">
+            {INSPECTION_STATES.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="label">Note (optional)</span>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            maxLength={1000}
+            className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
+            placeholder="What did you notice on the day?"
+            data-testid="inspection-note-input"
+          />
+        </label>
+        <Button type="submit" size="sm" disabled={busy || !dirty} data-testid="inspection-feedback-submit">
+          Save feedback
+        </Button>
+      </form>
+      {p.inspection_recorded_at && (
+        <p className="mt-2 text-xs text-muted" data-testid="inspection-feedback-recorded-at">
+          Currently: <strong className="text-navy">{inspectionLabel(p.inspection_state)}</strong> · recorded {formatDate(p.inspection_recorded_at)}
+        </p>
+      )}
     </section>
   );
 }

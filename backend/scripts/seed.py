@@ -32,6 +32,7 @@ from app.db.models import (  # noqa: E402
 from app.schemas.brief import Area, BriefPayload, default_brief  # noqa: E402
 from app.services.properties import load_demo_properties, reevaluate_journey  # noqa: E402
 from app.services.notifications import create_notification_event  # noqa: E402
+from app.services.reports import ensure_report_schedule_jobs  # noqa: E402
 
 ACCOUNTS = [
     {
@@ -74,6 +75,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "commercial",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": False,
+        "attribution_text": "Data sourced from realestate.com.au (REA Group). Not for redistribution without a commercial licence.",
     },
     {
         "slug": "domain-com-au",
@@ -85,6 +88,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "commercial",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": False,
+        "attribution_text": "Data sourced from Domain.com.au. Not for redistribution without a commercial licence.",
     },
     {
         "slug": "corelogic-au",
@@ -96,6 +101,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "licensed",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": False,
+        "attribution_text": "CoreLogic data is licensed for the buyer's own use only. Redistribution is prohibited without a separate agreement.",
     },
     {
         "slug": "proptrack-rea",
@@ -107,6 +114,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "commercial",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": False,
+        "attribution_text": "Data sourced from PropTrack (REA Group analytics). Not for redistribution without a commercial licence.",
     },
     {
         "slug": "reiwa-wa",
@@ -118,6 +127,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "licensed",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": False,
+        "attribution_text": "REIWA member data is licensed for the buyer's own use only. Redistribution requires REIWA member access.",
     },
     {
         "slug": "reiq-qld",
@@ -129,6 +140,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "licensed",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": False,
+        "attribution_text": "REIQ member data is licensed for the buyer's own use only. Redistribution requires REIQ member access.",
     },
     {
         "slug": "reiv-vic",
@@ -140,6 +153,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "licensed",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": False,
+        "attribution_text": "REIV member data is licensed for the buyer's own use only. Redistribution requires REIV member access.",
     },
     {
         "slug": "pricefinder-au",
@@ -151,6 +166,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "commercial",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": False,
+        "attribution_text": "PriceFinder data is licensed for the buyer's own use only. Not for redistribution without a commercial licence.",
     },
     {
         "slug": "email-inbound",
@@ -162,6 +179,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "none_required",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": True,
+        "attribution_text": None,
     },
     {
         "slug": "onthehouse-au",
@@ -173,6 +192,8 @@ CONNECTOR_DEFINITIONS = [
         "licence_kind": "commercial",
         "licence_state": "not_required",
         "version": "synthetic-1.0",
+        "redistribution_allowed": False,
+        "attribution_text": "Data sourced from OnTheHouse (REA Group subsidiary). Not for redistribution — scraped source terms apply.",
     },
 ]
 
@@ -286,8 +307,13 @@ async def _seed_connectors(db: AsyncSession) -> None:
                     capabilities=defn["capabilities"],
                     jurisdiction_codes=defn["jurisdiction_codes"],
                     description=defn.get("description"),
+                    redistribution_allowed=defn.get("redistribution_allowed", False),
+                    attribution_text=defn.get("attribution_text"),
                 )
             )
+        else:
+            existing.redistribution_allowed = defn.get("redistribution_allowed", False)
+            existing.attribution_text = defn.get("attribution_text")
     await db.flush()
 
 
@@ -484,6 +510,7 @@ async def _seed_account(db: AsyncSession, spec: dict) -> None:
         db.add(workspace)
         await db.flush()
         db.add(Membership(workspace_id=workspace.id, user_id=user.id, role="owner"))
+    await ensure_report_schedule_jobs(db, workspace.id)
 
     journey = (
         await db.execute(select(Journey).where(Journey.workspace_id == workspace.id))

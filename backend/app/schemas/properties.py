@@ -18,6 +18,8 @@ BuyerState = Literal[
     "archived",
 ]
 
+InspectionResult = Literal["not_inspected", "feedback_pending", "great", "ok", "not_as_good"]
+
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -131,6 +133,9 @@ class PropertySummary(Strict):
     evaluation: EvaluationOut | None
     waived_criteria: list[str]
     allowed_transitions: list[str]
+    inspection_state: str
+    inspection_note: str | None
+    inspection_recorded_at: datetime | None
     updated_at: datetime
 
 
@@ -150,6 +155,12 @@ class StageChange(Strict):
 
 class SavedChange(Strict):
     saved: bool
+    expected_row_version: int
+
+
+class InspectionChange(Strict):
+    inspection_state: InspectionResult
+    inspection_note: str | None = Field(default=None, max_length=1000)
     expected_row_version: int
 
 

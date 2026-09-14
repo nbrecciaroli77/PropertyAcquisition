@@ -38,6 +38,7 @@ from app.schemas.auth import (
     WorkspaceOut,
 )
 from app.services.outbox import action_url, queue_email, record_audit
+from app.services.reports import ensure_report_schedule_jobs
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -226,6 +227,7 @@ async def signup(body: SignupRequest, db: AsyncSession = Depends(get_db)) -> Sig
     db.add(workspace)
     await db.flush()
     db.add(Membership(workspace_id=workspace.id, user_id=user.id, role="owner"))
+    await ensure_report_schedule_jobs(db, workspace.id)
 
     await _issue_verification(db, user)
     await record_audit(

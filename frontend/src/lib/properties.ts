@@ -87,6 +87,9 @@ export interface PropertySummary {
   evaluation: EvaluationOut | null;
   waived_criteria: string[];
   allowed_transitions: string[];
+  inspection_state: string;
+  inspection_note: string | null;
+  inspection_recorded_at: string | null;
   updated_at: string;
 }
 
@@ -172,6 +175,8 @@ export const propertyApi = {
     post<PropertyDetail>(`/journeys/${journeyId}/properties/${id}/stage`, { to_state, expected_row_version }),
   setSaved: (journeyId: string, id: string, saved: boolean, expected_row_version: number) =>
     post<PropertyDetail>(`/journeys/${journeyId}/properties/${id}/saved`, { saved, expected_row_version }),
+  setInspection: (journeyId: string, id: string, inspection_state: string, inspection_note: string | null, expected_row_version: number) =>
+    post<PropertyDetail>(`/journeys/${journeyId}/properties/${id}/inspection`, { inspection_state, inspection_note, expected_row_version }),
   addWaiver: (journeyId: string, id: string, criterion: string, reason: string) =>
     post<PropertyDetail>(`/journeys/${journeyId}/properties/${id}/waivers`, { criterion, reason }),
   revokeWaiver: (journeyId: string, id: string, waiverId: string) =>
@@ -206,6 +211,17 @@ export const BUYER_STATES: { key: string; label: BuyerState }[] = [
 
 export const buyerLabel = (key: string): BuyerState =>
   BUYER_STATES.find((s) => s.key === key)?.label ?? ("Reviewing" as BuyerState);
+
+export const INSPECTION_STATES: { key: string; label: string }[] = [
+  { key: "not_inspected", label: "Not inspected" },
+  { key: "feedback_pending", label: "Feedback pending" },
+  { key: "great", label: "Great" },
+  { key: "ok", label: "OK" },
+  { key: "not_as_good", label: "Not as good" },
+];
+
+export const inspectionLabel = (key: string): string =>
+  INSPECTION_STATES.find((s) => s.key === key)?.label ?? "Not inspected";
 
 const MARKET: Record<string, MarketState> = {
   active: "Active",

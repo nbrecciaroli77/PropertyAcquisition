@@ -20,27 +20,129 @@ from app.db.models import (
     DuplicateProposal,
     EnrichmentRecord,
     IntakeEvent,
+    JobRun,
     Journey,
     ListingCampaign,
     MatchEvaluation,
     Property,
     PropertyTask,
     ReportRun,
+    ScheduledJob,
     SourceReadiness,
 )
 from app.services.notifications import create_notification_event
 from app.services.properties import freshness_band
 
-GENERATION_VERSIONS = {"daily": "digest_v1", "weekly": "weekly_v1", "monthly": "monthly_v1"}
+GENERATION_VERSIONS = {"daily": "digest_v1", "weekly": "weekly_v2", "monthly": "monthly_v1"}
 REPORT_CATEGORY = {"daily": "digest_ready", "weekly": "weekly_report_ready", "monthly": "monthly_report_ready"}
 REPORT_TITLE = {
     "daily": "Property Acquisition – Your Daily Digest",
-    "weekly": "Property Acquisition – Your Weekly Effectiveness Report",
+    "weekly": "Property Acquisition – Your Weekly Report",
     "monthly": "Property Acquisition – Your Monthly Assessment",
 }
 ACTIVE_BUYER_STATES_EXCLUDED = ("rejected", "archived", "settled")
 UNVERIFIED_PRICE_KINDS = ("contact_agent", "expressions_of_interest", "conflicting")
 CANDIDATE_LIMIT = 5
+
+# ── Versioned report presentation contract ───────────────────────────────────
+# Each report type's generation_version pins an exact, ordered set of required
+# snapshot sections. A run can only reach release_state="ready" if its snapshot
+# satisfies the contract for its declared version — this is what "locked" means.
+REPORT_CONTRACT: dict[str, dict[str, Any]] = {
+    "daily": {
+        "contract_version": GENERATION_VERSIONS["daily"],
+        "required_sections": (
+            "title", "quiet_day", "material_changes_count", "current_candidates",
+            "new_leads", "price_verification_opportunities", "upcoming_home_opens",
+            "upcoming_deadlines", "source_evidence_health",
+        ),
+    },
+    "weekly": {
+        "contract_version": GENERATION_VERSIONS["weekly"],
+        "required_sections": (
+            "title", "period_start", "period_end", "unique_first_discoveries",
+            "later_channel_material_changes", "provisional_opportunities",
+            "fully_verified_eligibility", "high_priority_candidates", "hard_failures",
+            "unavailable_withdrawn_stock", "actions_replies_completed_tasks", "duplicates",
+            "source_coverage_readiness", "processing_evidence_latency_seconds",
+            "daily_trend", "source_channel_funnel", "suburb_outcome_view",
+        ),
+    },
+    "monthly": {
+        "contract_version": GENERATION_VERSIONS["monthly"],
+        "required_sections": (
+            "title", "period_start", "period_end", "actual_coverage_start", "is_partial_period",
+            "overall_activity", "source_value_unique_discoveries", "verdict_distribution",
+            "candidate_progression_stage_changes", "duplicate_and_intake_quality",
+            "task_action_completion", "report_notification_effectiveness",
+            "material_constraints", "improvement_priorities",
+        ),
+    },
+}
+
+# ── Schedule model only — never activated. enabled stays False everywhere. ───
+REPORT_SCHEDULE_TIMEZONE = "Australia/Perth"
+REPORT_SCHEDULE_DEFAULTS = {
+    "daily": "0 7 * * *",
+    "weekly": "0 18 * * 0",
+    "monthly": "0 7 1 * *",
+}
+
+
+def _assert_contract(report_type: str, snapshot: dict[str, Any]) -> None:
+    contract = REPORT_CONTRACT[report_type]
+    missing = [key for key in contract["required_sections"] if key not in snapshot]
+    if missing:
+        raise ValueError(f"snapshot violates the {report_type} presentation contract: missing {missing}")
+    if snapshot.get("title") != REPORT_TITLE[report_type]:
+        raise ValueError(f"snapshot violates the locked report identity for {report_type}: title mismatch")
+
+
+async def ensure_report_schedule_jobs(db: AsyncSession, workspace_id: uuid.UUID) -> None:
+    """Defines (but never enables) the report-release schedule configuration for a
+    workspace, one row per report type, in Australia/Perth local time. enabled stays
+    False; no scheduler reads or acts on these rows in this build."""
+    existing = (
+        await db.execute(
+            select(ScheduledJob).where(ScheduledJob.workspace_id == workspace_id, ScheduledJob.job_kind == "report_release")
+        )
+    ).scalars().all()
+    have = {j.config.get("report_type") for j in existing}
+    for report_type, cron in REPORT_SCHEDULE_DEFAULTS.items():
+        if report_type in have:
+            continue
+        db.add(
+            ScheduledJob(
+                workspace_id=workspace_id, job_kind="report_release", schedule_cron=cron, schedule_version=1,
+                timezone=REPORT_SCHEDULE_TIMEZONE, enabled=False, config={"report_type": report_type},
+            )
+        )
+    await db.flush()
+
+
+async def _find_schedule_job(db: AsyncSession, workspace_id: uuid.UUID, report_type: str) -> ScheduledJob | None:
+    jobs = (
+        await db.execute(select(ScheduledJob).where(ScheduledJob.workspace_id == workspace_id, ScheduledJob.job_kind == "report_release"))
+    ).scalars().all()
+    return next((j for j in jobs if j.config.get("report_type") == report_type), None)
+
+
+async def _log_job_run(
+    db: AsyncSession, *, workspace_id: uuid.UUID, report_type: str, run_state: str, detail: dict[str, Any],
+    now: datetime, failure_reason: str | None = None,
+) -> None:
+    """Append-only execution telemetry for a report action. Skips quietly if no
+    schedule row exists yet (legacy workspace) — never blocks the report itself."""
+    job = await _find_schedule_job(db, workspace_id, report_type)
+    if job is None:
+        return
+    db.add(
+        JobRun(
+            workspace_id=workspace_id, job_id=job.id, run_state=run_state, started_at=now, finished_at=now,
+            duration_ms=0, failure_reason=failure_reason, detail=detail,
+        )
+    )
+    await db.flush()
 
 
 def _period_for(
@@ -497,7 +599,9 @@ async def generate_report(
     existing = (
         await db.execute(select(ReportRun).where(ReportRun.workspace_id == journey.workspace_id, ReportRun.idempotency_key == idem_key))
     ).scalar_one_or_none()
-    if existing is not None and existing.release_state == "ready":
+    # "ready" and "ready_to_send" are both final producer states — a ready_to_send run
+    # is an immutable snapshot and must never be regenerated in place.
+    if existing is not None and existing.release_state in ("ready", "ready_to_send"):
         return existing
     run = existing
     if run is None:
@@ -517,9 +621,15 @@ async def generate_report(
             snapshot, coverage = await _weekly_snapshot(db, journey, period_start=period_start, period_end=period_end)
         else:
             snapshot, coverage = await _monthly_snapshot(db, journey, period_start=period_start, period_end=period_end)
+        _assert_contract(report_type, snapshot)
     except Exception as exc:
         run.release_state = "failed"
         run.failure_reason = str(exc)[:400]
+        await _log_job_run(
+            db, workspace_id=journey.workspace_id, report_type=report_type, run_state="failed",
+            detail={"action": "generate", "release_kind": release_kind, "report_run_id": str(run.id)},
+            now=moment, failure_reason=str(exc)[:400],
+        )
         await db.flush()
         raise
     run.snapshot = snapshot
@@ -528,9 +638,31 @@ async def generate_report(
     run.release_state = "ready"
     run.generated_at = moment
     await db.flush()
+    await _log_job_run(
+        db, workspace_id=journey.workspace_id, report_type=report_type, run_state="completed",
+        detail={"action": "generate", "release_kind": release_kind, "report_run_id": str(run.id)}, now=moment,
+    )
     await create_notification_event(
         db, workspace_id=journey.workspace_id, category=REPORT_CATEGORY[report_type], fingerprint=f"report:{run.id}",
         title=snapshot.get("title", "Report ready"), message="Your report preview is ready to view.",
         safe_deep_link=f"/app/reports?type={report_type}&run={run.id}", priority="normal", report_run_id=run.id, now=moment,
+    )
+    return run
+
+
+async def mark_ready_to_send(db: AsyncSession, *, run: ReportRun, actor_user_id: uuid.UUID, now: datetime | None = None) -> ReportRun:
+    """Producer/delivery separation: freezes an already-generated report into an
+    immutable READY_TO_SEND snapshot. This is the producer's boundary — it never
+    contacts an email provider or any delivery mechanism, which stays disabled."""
+    if run.release_state != "ready":
+        raise ValueError("Only a ready report can be marked ready to send.")
+    moment = now or now_utc()
+    run.release_state = "ready_to_send"
+    run.ready_to_send_at = moment
+    run.ready_to_send_by = actor_user_id
+    await db.flush()
+    await _log_job_run(
+        db, workspace_id=run.workspace_id, report_type=run.report_type, run_state="completed",
+        detail={"action": "ready_to_send", "report_run_id": str(run.id)}, now=moment,
     )
     return run

@@ -1,0 +1,16 @@
+{
+  "summary": "Narrow retest of the single failing item from iteration_9 (M6.1 Weekly report title). Logged in as owner@propertyacquisition-demo.com, navigated to /app/reports, selected the Weekly tab (data-testid='reports-tab-weekly'). The current run's report-title renders exactly 'Property Acquisition – Your Weekly Report' (no longer '...Weekly Effectiveness Report'). Opened the Previous runs history (data-testid='reports-history') which contained 2 runs; clicking the OLDEST run (backfilled directly in the DB) also renders the corrected title 'Property Acquisition – Your Weekly Report'. Bug is fully verified fixed end-to-end. No other flows were tested per E1's explicit scope.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (1/1 retested item passed; both current run and oldest backfilled run show corrected title)"},
+  "test_credentials": "owner@propertyacquisition-demo.com / Prototype2026pass (works, login returns 200, pa_access + pa_refresh cookies set)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "M6.1 is fully verified end-to-end. Weekly title fix is confirmed in UI for both freshly generated runs and the backfilled historical run. Note: history buttons on Weekly tab currently show 2 entries (indices 0=newest READY, 1=oldest READY_TO_SEND) — both render correct title. Login is at /app/... routes; use data-testid='public-nav-sign-in' link from the welcome page, then sign-in-email / sign-in-password / sign-in-submit testids.",
+  "rca of the issue": "Not applicable — this was a retest of an already-fixed bug. Fix (per E1): GENERATION_VERSIONS['weekly'] bumped to weekly_v2 to force fresh runs, _assert_contract() now asserts snapshot['title'] == REPORT_TITLE[report_type], and legacy weekly ReportRun rows were backfilled via a one-off DB script. UI now correctly displays the canonical title from snapshot.title."
+}

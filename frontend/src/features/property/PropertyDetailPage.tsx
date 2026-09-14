@@ -10,7 +10,7 @@ import { formatDate, triText } from "../../lib/format";
 import { buyerLabel, factText, factTri, humanise, marketLabel, priceKindLabel } from "../../lib/properties";
 import { MatchEvidence } from "./MatchEvidence";
 import { Activity, Notes, Tasks } from "./NotesTasksActivity";
-import { Workflow } from "./Workflow";
+import { InspectionFeedback, Workflow } from "./Workflow";
 import { usePropertyDetail } from "./usePropertyDetail";
 
 export default function PropertyDetailPage() {
@@ -153,6 +153,7 @@ export default function PropertyDetailPage() {
 
         <aside className="min-w-0 space-y-6">
           <Workflow p={p} busy={busy} mutate={mutate} />
+          <InspectionFeedback p={p} busy={busy} mutate={mutate} />
           <section aria-labelledby="evidence-heading" className="card p-5" data-testid="observations-panel">
             <h2 id="evidence-heading" className="text-h3 font-semibold">
               Source observations

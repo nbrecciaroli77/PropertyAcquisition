@@ -1,0 +1,55 @@
+{
+  "summary": "M6.1 Product Alignment — first test pass. Backend regression suite (10 pytest cases) added at tests/test_m6_1_alignment.py: 9/10 PASS. Verified locked report titles for daily+monthly, presentation contract, ready-to-send state transition + 409 on repeat, generate idempotency after ready_to_send, inspection endpoint (state + row_version + optimistic concurrency), inspection isolation from gates/match, ScheduledJob invariant (all enabled=false; report_release rows present), plus M5.x notifications/tasks spot checks. Frontend: /app/reports shows Daily = correct locked title + READY_TO_SEND badge + explanatory note; Monthly shows correct locked title 'Property Acquisition – Your Monthly Assessment' with 'Mark ready to send' button + explanatory 'delivery disabled' note; Property Detail page shows Inspection feedback panel below Your workflow with all required data-testids (panel/select/note/submit/recorded-at). ONE CRITICAL BUG FOUND: Weekly report tab still displays banned wording 'Property Acquisition – Your Weekly Effectiveness Report' because a pre-M6.1 weekly ReportRun (generation_version=weekly_v1) exists in the demo journey and is returned by idempotent generate — its snapshot.title was persisted with the old wording and is not refreshed. M6.1 code writes the correct locked title only for NEW runs; existing runs are left as-is. The migration c8d5e2f9a4b1 does not backfill snapshot.title.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/journeys/{journey_id}/reports/weekly/generate",
+        "issue": "Idempotency returns a pre-M6.1 weekly ReportRun whose snapshot.title is the banned wording 'Property Acquisition – Your Weekly Effectiveness Report'. New generations use the locked title, but the demo journey (and any customer workspace that generated weekly reports before M6.1) will keep showing the banned title until the stale run is replaced. Root cause: (a) migration c8d5e2f9a4b1 does not backfill ReportRun.snapshot.title, and (b) generate_report() treats existing 'ready' runs as final even when their snapshot title differs from REPORT_TITLE. Also, _assert_contract() only checks section keys are present — it does NOT assert snapshot['title'] == REPORT_TITLE[report_type], so the contract cannot catch this.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ReportsPage / ReportView (Weekly tab)",
+        "issue": "Renders 'Property Acquisition – Your Weekly Effectiveness Report' verbatim from snapshot.title (banned wording). Symptom of the backend stale-run bug above.",
+        "selector": "data-testid=report-state (Weekly tab)",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "ReportsPage — Mark ready to send button",
+        "issue": "After clicking 'Mark ready to send' on the Weekly tab, within a ~3s window the button showed 'Marking…' but report-state testid still read 'ready' and the button had not disappeared. Likely just a slow re-fetch/render — not confirmed as a functional bug, but worth verifying that the ReportView re-hydrates once the POST resolves.",
+        "selector": "data-testid=reports-mark-ready-to-send",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_m6_1_alignment.py",
+    "/app/test_reports/pytest/m6_1_results.xml"
+  ],
+  "action_items": [
+    "Fix stale weekly snapshot.title on the demo journey (and any workspace with pre-M6.1 weekly runs). Two options: (a) extend migration c8d5e2f9a4b1 to UPDATE report_runs SET snapshot = jsonb_set(snapshot,'{title}', to_jsonb(<locked-title-per-report_type>)) WHERE report_type IN ('daily','weekly','monthly') AND generation_version IN (...); OR (b) bump generation_version (e.g. weekly_v1 -> weekly_v1a) so stale runs are no longer treated as final by the idempotency check.",
+    "Strengthen _assert_contract() in app/services/reports.py to also assert snapshot['title'] == REPORT_TITLE[report_type] so no run can ever reach release_state='ready' with a wrong/banned title — this makes the locked-title guarantee testable end-to-end going forward.",
+    "Confirm ReportsPage re-fetches the run after successful mark-ready-to-send POST so the badge flips to 'Ready to send' and the button unmounts within the same render cycle (minor UX polish)."
+  ],
+  "critical_code_review_comments": [
+    "app/services/reports.py: REPORT_CONTRACT.required_sections includes 'title' as a key but never asserts its VALUE matches REPORT_TITLE — an easy hole (allowed the current bug to persist). Add an equality check inside _assert_contract().",
+    "app/services/reports.py generate_report() idempotency skips regeneration when existing.release_state in ('ready','ready_to_send'). Correct per spec, but combined with the missing title-value check it means the M6.1 title rename is silently ignored for any pre-existing run. A generation_version bump or a data migration is required whenever locked copy changes.",
+    "app/db migration c8d5e2f9a4b1: adds ready_to_send_at/ready_to_send_by + inspection_* + redistribution fields but does NOT backfill title strings in existing report_runs.snapshot. Consider adding a data-migration step for that."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_m6_1_alignment.py (new)"
+  ],
+  "success_rate": {"backend": "90% (9/10 pytest)", "frontend": "80% (Daily+Monthly OK, Inspection panel OK; Weekly title fails)"},
+  "test_credentials": "owner@propertyacquisition-demo.com / Prototype2026pass (workspace 'Brecciaroli household', journey 'Perth family home 2026')",
+  "seed_data_creation": "None. Reused seeded demo journey/property. Backend tests do NOT create test workspaces (they exercise the demo owner's data through the live API).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend test file: /app/backend/tests/test_m6_1_alignment.py. Run with: cd /app/backend && python -m pytest tests/test_m6_1_alignment.py -v. The only failing case is 'test_report_generate_title_and_contract[weekly]' — root cause is a stale pre-M6.1 weekly ReportRun in the demo DB with snapshot.title='Property Acquisition – Your Weekly Effectiveness Report'. Ready-to-send transition + 409 idempotency + inspection endpoint + row_version + ScheduledJob enabled=false invariant all PASS. ScheduledJob check confirmed by directly querying via SQLAlchemy inside the test (see test_no_scheduled_job_is_enabled). UI test IDs verified live: reports-tab-{daily,weekly,monthly}, reports-mark-ready-to-send, report-state, report-ready-to-send-note, inspection-feedback-panel, inspection-state-select, inspection-note-input, inspection-feedback-submit, inspection-feedback-recorded-at — all render correctly.",
+  "rca of the issue": "Weekly title bug RCA: (1) Reproduction: GET /api/journeys/{journey_id}/reports?report_type=weekly on the demo owner returns a single run with generated_at=2026-09-14T08:56:39Z, release_state=ready, generation_version=weekly_v1, snapshot.title='Property Acquisition – Your Weekly Effectiveness Report'. Any POST /generate on 'weekly' with the same period returns that same run because generate_report() (services/reports.py:598-602) considers release_state in ('ready','ready_to_send') final. (2) The ReportsPage frontend reads snapshot.title directly, so the banned wording renders on the Weekly tab. (3) Contract does not catch it because _assert_contract only validates section keys, not the title string value. Mitigation: either backfill in migration c8d5e2f9a4b1, or bump generation_version for weekly (which invalidates the stale run), and add a title-value assertion inside _assert_contract. Prevention: any future locked-title change must be paired with a generation_version bump AND a snapshot backfill."
+}

@@ -22,6 +22,7 @@ export default function ReportsPage() {
   const [selected, setSelected] = useState<ReportRun | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [releasing, setReleasing] = useState(false);
 
   const load = async () => {
     if (!active) return;
@@ -50,6 +51,21 @@ export default function ReportsPage() {
       setError(e instanceof Error ? e.message : "Report could not be generated.");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const markReadyToSend = async () => {
+    if (!active || !selected) return;
+    setReleasing(true);
+    setError(null);
+    try {
+      const run = await reportApi.markReadyToSend(active.id, selected.id);
+      await load();
+      setSelected(run);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Report could not be marked ready to send.");
+    } finally {
+      setReleasing(false);
     }
   };
 
@@ -105,6 +121,14 @@ export default function ReportsPage() {
               description="Generate a preview to see what this report would show from your current data."
               data-testid="reports-empty"
             />
+          )}
+          {selected?.release_state === "ready" && (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-border bg-canvas-deep px-4 py-2">
+              <p className="text-sm text-muted">Freeze this snapshot as ready to send. Delivery stays disabled — no email is sent.</p>
+              <Button size="sm" variant="secondary" disabled={releasing} onClick={() => void markReadyToSend()} data-testid="reports-mark-ready-to-send">
+                {releasing ? "Marking…" : "Mark ready to send"}
+              </Button>
+            </div>
           )}
           {selected && <ReportView run={selected} />}
         </section>
