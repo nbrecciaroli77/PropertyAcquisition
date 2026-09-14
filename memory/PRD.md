@@ -195,3 +195,54 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
 - Frontend: 7 `auth.test.tsx` Jest tests pass (updated for outbox link removal). `yarn build` clean.
 - Seed accounts preserved: `owner@`, `other@`, `lockout-drills@propertyacquisition-demo.com`.
 - Credentials for testing: `/app/memory/test_credentials.md`.
+
+### M5.2 report previews, exports and account/workspace deletion — 14 September 2026
+
+- Added additive revision `b7c4d1e8f2a3` (report_type/period/cutoff/timezone/snapshot columns on
+  `report_runs`, plus new `report_preferences`, `data_exports`, `deletion_requests` tables); sole
+  Alembic head is now `b7c4d1e8f2a3` (parent `f4a8c6d2e1b9`).
+- Report generation: `app/services/reports.py` builds deterministic daily/weekly/monthly snapshots from
+  live evidence only (Unknown stays Unknown; no invented travel/price/coverage). Idempotency key covers
+  report type + release kind + exact period + generation version, so repeat "Generate preview" requests
+  return the same run and never create a duplicate `digest_ready`/`weekly_report_ready`/
+  `monthly_report_ready` notification. Daily uses a rolling calendar-day window with cutoff=now; weekly
+  is an exact trailing 7-day Australia/Perth window; monthly is the previous calendar month, labelled
+  `is_partial_period` when the workspace has less history than the month requires.
+- Reports UI at `/app/reports` (also linked from the rail nav and the Today page): Daily/Weekly/Monthly
+  tabs, "Generate preview" button, latest preview with preview/state badges, previous-runs history list,
+  print/PDF button. Fixed a testing-agent-found cold-navigation flash (empty state showed before
+  `useJourneys()` finished loading) by gating on the `loading` flag.
+- Report generation *schedule* preferences (`report_preferences` table, distinct from the M5.1
+  notification-category preferences) are exposed in Settings → Notifications via `ReportPreferences.tsx`:
+  daily time+weekdays, weekly day/time, monthly day/time, timezone, requested vs. effective channel
+  (email/both always rejected 422 `email_provider_not_connected` and rendered inert). No scheduler reads
+  these yet — generation stays manual/on-demand only.
+- Data export (`app/services/exports.py`, `app/api/exports.py`): personal export (profile, memberships,
+  notifications, tasks, audit) and owner-only workspace export (brief versions, properties, buyer
+  workflow, campaigns, observations/facts, evaluations/waivers, notes/tasks, intake/discovery history,
+  duplicate decisions, notification/report history, source config/readiness, audit) are built on demand
+  as an in-memory ZIP and stored as `bytea` directly in Postgres (no object storage / external service),
+  expiring after 24h. Excludes password hashes, session/refresh/reset tokens and credential references by
+  construction. UI at Settings → "Open data & privacy" (`/app/settings/privacy`).
+- Account/workspace deletion (`app/services/deletion.py`, `app/api/account.py`): request needs a fresh
+  password check + typed `"DELETE"` confirmation, enters a 72-hour cooling-off (`pending_cooloff`) and can
+  be cancelled any time before execution. Distinguishes `leave_workspace` / `delete_account` /
+  `delete_workspace`, blocking any path that would orphan a shared workspace
+  (`ownership_transfer_required` / `sole_owner_cannot_leave`). Execution (`process_due_deletions`) revokes
+  all sessions, anonymises the user row, cascades deletion of any solely-owned workspace, purges the
+  user's exports, and never touches another workspace — only reachable via the dev-gated
+  `/api/dev/process-deletions` route (404 unless `DEV_ROUTES_ENABLED=true`) or the manual
+  `scripts/process_deletions.py`; no production scheduler was added.
+- Verification: new `tests/test_m5_2_privacy.py` — **14/14 passed** against the live Supabase DB using
+  disposable synthetic accounts under `m52tests.pa-prototype.com` (idempotency + notification dedup,
+  Perth timezone period boundaries, quiet-day + Unknown preservation, partial-period monthly, cross-tenant
+  report isolation, requested-vs-effective channel rejection, export contents/secret exclusion,
+  export owner-only + isolation, export expiry, deletion reauth/typed-confirmation errors, ownership
+  transfer blocking, cancel flow, isolated execution with session revocation + workspace cascade delete,
+  no email queued for any of the above). All disposable test users/workspaces cleaned up after the run;
+  confirmed `owner@`/`other@propertyacquisition-demo.com` untouched (`deleted_at` still `None`).
+  `yarn tsc --noEmit` clean. Frontend testing agent run: 11/11 scoped features passed; one LOW-priority
+  cold-navigation UX bug found and fixed (see above).
+- No email, Gmail, Google Drive, external API or production scheduler was added or invoked. Live
+  Supabase data was only migrated additively; demo owner/other accounts were never mutated destructively.
+- Checkpoint: `checkpoint/m5-2-reports-privacy`.

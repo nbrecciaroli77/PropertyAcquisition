@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -958,6 +959,9 @@ class EnrichmentRecord(Base, TimestampMixin):
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
 
+REPORT_TYPES = ("daily", "weekly", "monthly")
+
+
 class ReportRun(Base, TimestampMixin):
     """Report-run/release metadata.  Distinguishes preview, on-demand and future
     production releases.  idempotency_key is unique per workspace.  No email
@@ -970,6 +974,7 @@ class ReportRun(Base, TimestampMixin):
         CheckConstraint(
             f"release_state in {REPORT_RELEASE_STATES!r}", name="ck_report_run_release_state"
         ),
+        CheckConstraint(f"report_type in {REPORT_TYPES!r}", name="ck_report_run_report_type"),
         Index("ix_report_runs_workspace_journey", "workspace_id", "journey_id"),
     )
 
@@ -985,8 +990,17 @@ class ReportRun(Base, TimestampMixin):
     )
     idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False, default="preview")
+    report_type: Mapped[str] = mapped_column(String(16), nullable=False, default="daily")
     release_state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     recipient_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cutoff_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Australia/Perth")
+    generation_version: Mapped[str] = mapped_column(String(40), nullable=False, default="v1")
+    is_partial_period: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    failure_reason: Mapped[str | None] = mapped_column(String(400))
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
@@ -1109,3 +1123,87 @@ class NotificationPreference(Base, TimestampMixin):
     report_daily_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     report_weekly_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     report_monthly_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+# ── M5.2 Reports, privacy, export and deletion ───────────────────────────────
+DATA_EXPORT_TYPES = ("personal", "workspace")
+DATA_EXPORT_STATES = ("pending", "generating", "ready", "failed", "expired")
+DELETION_REQUEST_TYPES = ("leave_workspace", "delete_account", "delete_workspace")
+DELETION_REQUEST_STATES = ("pending_cooloff", "cancelled", "processing", "completed", "failed")
+
+
+class ReportPreference(Base, TimestampMixin):
+    """Requested report-generation schedule. No production scheduler reads this yet;
+    generation stays manual/on-demand until a scheduler is explicitly activated."""
+
+    __tablename__ = "report_preferences"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "user_id", "report_type", name="uq_report_preference_scope"),
+        CheckConstraint(f"report_type in {REPORT_TYPES!r}", name="ck_report_preference_type"),
+        CheckConstraint(f"requested_channel in {NOTIFICATION_CHANNELS!r}", name="ck_report_preference_requested"),
+        CheckConstraint(f"effective_channel in {NOTIFICATION_CHANNELS!r}", name="ck_report_preference_effective"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    report_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    local_time: Mapped[str] = mapped_column(String(5), nullable=False, default="07:00")
+    weekdays: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    day_of_week: Mapped[int | None] = mapped_column(Integer)
+    day_of_month: Mapped[int | None] = mapped_column(Integer)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Australia/Perth")
+    requested_channel: Mapped[str] = mapped_column(String(16), nullable=False, default="in_app")
+    effective_channel: Mapped[str] = mapped_column(String(16), nullable=False, default="in_app")
+
+
+class DataExport(Base):
+    """Self-contained ZIP export stored as bytes in Postgres. No object storage or
+    other external service is connected; the file expires and is purged in place."""
+
+    __tablename__ = "data_exports"
+    __table_args__ = (
+        CheckConstraint(f"export_type in {DATA_EXPORT_TYPES!r}", name="ck_data_export_type"),
+        CheckConstraint(f"state in {DATA_EXPORT_STATES!r}", name="ck_data_export_state"),
+        Index("ix_data_exports_requested_by", "requested_by_user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    requested_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    export_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    file_data: Mapped[bytes | None] = mapped_column(LargeBinary)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failure_reason: Mapped[str | None] = mapped_column(String(400))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    download_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class DeletionRequest(Base, TimestampMixin):
+    """Cooling-off deletion workflow. Execution is manual/test-only via a protected
+    processor; no production deletion scheduler is activated by this migration."""
+
+    __tablename__ = "deletion_requests"
+    __table_args__ = (
+        CheckConstraint(f"request_type in {DELETION_REQUEST_TYPES!r}", name="ck_deletion_request_type"),
+        CheckConstraint(f"state in {DELETION_REQUEST_STATES!r}", name="ck_deletion_request_state"),
+        Index("ix_deletion_requests_requested_by", "requested_by_user_id", "state"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    requested_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    request_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    target_workspace_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"))
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending_cooloff")
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    scheduled_execute_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failure_reason: Mapped[str | None] = mapped_column(String(400))

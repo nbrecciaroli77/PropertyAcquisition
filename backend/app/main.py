@@ -26,6 +26,9 @@ def create_app() -> FastAPI:
     from app.api.sources import router as sources_router
     from app.api.tasks import router as tasks_router
     from app.api.notifications import router as notifications_router
+    from app.api.reports import router as reports_router
+    from app.api.exports import router as exports_router
+    from app.api.account import router as account_router
     from app.api.system import router as system_router
     from app.core.config import get_settings
     from app.db.base import dispose_engine
@@ -74,5 +77,8 @@ def create_app() -> FastAPI:
     app.include_router(sources_router, prefix="/api")
     app.include_router(tasks_router, prefix="/api")
     app.include_router(notifications_router, prefix="/api")
+    app.include_router(reports_router, prefix="/api")
+    app.include_router(exports_router, prefix="/api")
+    app.include_router(account_router, prefix="/api")
     app.include_router(dev_router, prefix="/api")
     return app

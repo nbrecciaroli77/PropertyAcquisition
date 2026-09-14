@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "../../components/Button";
+import { Button, ButtonLink } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { FormNotice, SelectField, TextField } from "../../components/Form";
 import { MilestoneNote, PageHeader } from "../../components/Page";
@@ -193,30 +193,20 @@ export default function SettingsPage() {
           </h2>
           <p className="mt-2 text-sm text-muted">
             Google sign-in and any Gmail connection are separate decisions — the first never implies the second, and no
-            mailbox is connected.
+            mailbox is connected. Export your data, review deletion safeguards and read the full privacy notes on the
+            dedicated page.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" disabled title="Arrives in Milestone 6">
-              Export my data
-            </Button>
-            <ConfirmDialog
-              title="Request deletion?"
-              description="In the finished prototype this revokes sessions, stops jobs and deletes your workspace data without recreating it. The deletion job itself arrives in Milestone 6."
-              confirmLabel="Request deletion"
-              destructive
-              onConfirm={() => setNotice("Deletion request noted. The deletion job arrives in Milestone 6.")}
-              trigger={
-                <Button variant="destructive" size="sm" data-testid="request-deletion">
-                  Request deletion
-                </Button>
-              }
-            />
+          <div className="mt-4">
+            <ButtonLink to="/app/settings/privacy" variant="secondary" size="sm" data-testid="open-privacy-page">
+              Open data &amp; privacy
+            </ButtonLink>
           </div>
         </section>
       </div>
 
       <MilestoneNote milestone={6}>
-        Export, deletion jobs, audit browsing, retention controls and household invitations arrive in Milestone 6.
+        Household invitations, audit browsing, retention automation and production deletion scheduling arrive in
+        Milestone 6.
       </MilestoneNote>
     </>
   );

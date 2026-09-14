@@ -29,6 +29,8 @@ import PropertyDetailPage from "../features/property/PropertyDetailPage";
 import AddPropertyPage from "../features/intake/AddPropertyPage";
 import DuplicatesPage from "../features/duplicates/DuplicatesPage";
 import NotificationCenterPage from "../features/notifications/NotificationCenterPage";
+import ReportsPage from "../features/reports/ReportsPage";
+import PrivacyDataPage from "../features/settings/PrivacyDataPage";
 
 /** Sends a signed-in owner to setup when no journey exists yet. */
 function AppLanding() {
@@ -77,6 +79,8 @@ export const routes = [
       { path: "agents", element: <AgentsPage /> },
       { path: "sources", element: <SourcesPage /> },
       { path: "settings", element: <SettingsPage /> },
+      { path: "settings/privacy", element: <PrivacyDataPage /> },
+      { path: "reports", element: <ReportsPage /> },
       { path: "more", element: <MorePage /> },
       { path: "properties/add", element: <AddPropertyPage /> },
       { path: "properties/:id", element: <PropertyDetailPage /> },

@@ -141,6 +141,9 @@ export default function TodayPage() {
                     </div>
                   </div>
                 </div>
+                <Link to="/app/reports" className="mt-4 inline-block text-sm font-semibold text-eucalyptus-deep hover:underline underline-offset-4" data-testid="today-view-reports">
+                  View report previews →
+                </Link>
               </section>
 
               <section aria-labelledby="changes-heading" className="card p-5">

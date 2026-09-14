@@ -1,0 +1,35 @@
+{
+  "summary": "M5.2 Digest/Report previews + Data & Privacy — frontend testing complete. All 11 scoped features verified end-to-end on the live preview URL against the seeded owner account (Perth family home 2026). Reports UI (Daily/Weekly/Monthly) renders with real seeded data, idempotency holds (2 generates → 1 history entry), Print, history click, partial-period badge, quiet-day/empty-state handling, and preview/state badges all work. Settings › Notifications embeds a fully functional ReportPreferences section (Daily/Weekly/Monthly enable/time/weekday/day-of-week/day-of-month + Save per section, persistence verified via reload; Email/Both channel affordances visibly disabled). Settings › Privacy links to /app/settings/privacy (renamed replacement for the old placeholder). Privacy page shows privacy copy, exports section with owner-only workspace export button, live personal + workspace exports going 'ready' with working Download links to /api/exports/<id>/download, and deletion section with request-type consequence text, password + typed-DELETE fields, submit-disabled gating, ConfirmDialog (72-hour cooling-off copy), and safe Cancel behaviour (dialog closes without submitting). Regression smoke on Today/Brief/Discover/Pipeline/Tasks/Notifications all still render. Mobile viewport (390x844) checked for Reports and Privacy — layouts adapt cleanly. One minor UX bug found on Reports page (see below).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ReportsPage",
+        "issue": "When navigating directly to /app/reports (deep-link / cold refresh) before the JourneyProvider has finished loading, `active` is null and the page renders the 'No buying journey yet' EmptyState. It should show a loading skeleton while `useJourneys().loading===true` and only fall back to the no-journey empty state once loading is complete AND journeys.length===0. Reproduced once via page.goto('/app/reports') right after login; navigating via the rail 'Reports' link or reloading after data cache warms works fine.",
+        "selector": "[data-testid=\"reports-no-journey\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "ReportsPage: gate the `!active` empty state on `!loading` from useJourneys() (or render a Skeleton while loading) to avoid the flash-of-empty-state on cold /app/reports navigation."
+  ],
+  "critical_code_review_comments": [
+    "ReportsPage.tsx line 56-58 — the `if (!active) return <EmptyState 'No buying journey yet' />` branch doesn't distinguish loading vs truly-empty journey list. Use `useJourneys()` `loading` flag before deciding to show the empty state.",
+    "NotificationSettings.tsx is written as one giant single-line JSX expression (line 19) — very hard to review/maintain, should be reformatted into normal multi-line JSX. Not blocking but flagging for future refactor."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per instructions)", "frontend": "100% functional (1 minor UX gap)"},
+  "test_credentials": "owner@propertyacquisition-demo.com / Prototype2026pass (seeded owner used for all tests). No disposable accounts created. No real deletion request submitted.",
+  "seed_data_creation": "None. Two report runs (daily + weekly + monthly previews) and two exports (personal + workspace) were generated on the demo owner account during testing — both exports auto-expire in 24h.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reports page works well with the seeded 'Perth family home 2026' journey — daily digest shows 5 candidate cards + material changes section. Weekly/Monthly show real (mostly-zero) metrics with a partial-period badge on monthly (dataset only spans since 9/4/2026). Idempotency and history sidebar confirmed. Report preferences UI lives inside SettingsPage → NotificationSettings component (embedded ReportPreferences) at /app/settings; there is NO separate /app/settings/notifications route (that was my initial mistake). Deletion flow was only verified as-far-as opening/canceling the ConfirmDialog — an actual wrong-password submit through Confirm was NOT executed to avoid touching the shared demo account; main agent's pytest coverage handles that path.",
+  "rca of the issue": "ReportsPage bug RCA: ReportsPage renders `if (!active) return <EmptyState 'No buying journey yet'/>`. On direct deep-link navigation, JourneyProvider is still fetching /api/journeys so `journeys=[]` and `active=null` briefly — the guard fires and shows a definitive-looking empty state that misleads the user. Reproduction: log in fresh, then `page.goto('/app/reports')` immediately. Mitigation: change the guard to `if (!active) return loading ? <Skeleton/> : <EmptyState .../>;` (pull `loading` from useJourneys)."
+}

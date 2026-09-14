@@ -16,6 +16,7 @@ from app.core.config import get_settings
 from app.core.deps import AuthContext, get_auth, require_writer, scoped_journey
 from app.db.base import get_db
 from app.db.models import BriefVersion, OutboxMessage
+from app.services.deletion import process_due_deletions
 from app.services.properties import load_demo_properties, reevaluate_journey
 
 router = APIRouter(prefix="/dev", tags=["dev"])
@@ -77,3 +78,14 @@ async def load_demo(
         await reevaluate_journey(db, journey, version, auth.user.id)
     await db.commit()
     return {"created": created, "evaluated_against": version.version_no if version else "no published brief"}
+
+
+@router.post("/process-deletions")
+async def dev_process_deletions(db: AsyncSession = Depends(get_db)) -> dict[str, int]:
+    """Manual/test-only trigger for the deletion processor. Never exposed outside development
+    (404 unless DEV_ROUTES_ENABLED). No production deletion scheduler is activated."""
+    if not get_settings().dev_routes_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    outcome = await process_due_deletions(db)
+    await db.commit()
+    return outcome
