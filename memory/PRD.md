@@ -1,7 +1,7 @@
 # IDEA-010 Property Acquisition — Product requirements and status
 
 Working name: "Property Acquisition" (working concept, not final). Gate: **initial private prototype**.
-Last updated: 14 September 2026 (Prompt 05.1 complete — checkpoint/m5-1-notifications-reminders).
+Last updated: 17 September 2026 (Prompt 06.1 complete — checkpoint/m6-1-product-alignment).
 
 ## Execution state
 
@@ -13,8 +13,9 @@ Last updated: 14 September 2026 (Prompt 05.1 complete — checkpoint/m5-1-notifi
 | **04.1** | Manual property intake (structured form, URL + facts, pasted text), durable IntakeEvent, workspace-scoped idempotency, exact-address duplicate detection, deterministic text parser v1.0 | **Complete** — tested 12/12 scenarios |
 | **04.2** | CSV intake (preview, server-authoritative re-parse, formula-injection protection), duplicate review (merge/split/undo, 81A/C warning, snapshot-based undo), sources & coverage screen (all required fields, read-only, synthetic), sender-alias review (demo workspace only) | **Verified** — `checkpoint/m4-2-verified` |
 | **05.1** | Durable in-app notification domain, task CRUD/reminders, preferences, manual-only processing and local ICS export | **Complete** — `checkpoint/m5-1-notifications-reminders` |
-| **05.2** | Digest/report previews plus essential privacy, export and deletion functions | **Next** |
-| **Production Hardening** | Security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Backlog** |
+| **05.2** | Digest/report previews plus essential privacy, export and deletion functions | **Complete** — `checkpoint/m5-2-reports-privacy` |
+| **06.1** | Pre-deployment product alignment — locked report identities, presentation contract, producer/delivery separation, schedule model (disabled), execution telemetry, source rights metadata, manual inspection feedback | **Complete** — `checkpoint/m6-1-product-alignment` |
+| **06.2** | Production hardening and deployment — security, accessibility, configuration, backups, monitoring, recovery, final go/no-go | **Backlog — awaiting user approval to start** |
 
 ## Original problem statement (owner's brief)
 
@@ -135,10 +136,9 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
 
 ### P1
 
-- Milestone 4: property gates and pipelines, the deferred **Add property** intake UI.
-- Milestone 5: intake idempotency and the deferred **Add reminder** interaction.
-- Milestone 6: tasks and daily digest through the durable outbox (still no delivery), household invitations
-  and roles, data export, deletion job, audit browsing, retention controls.
+- Milestone 6.2: production hardening and deployment — security review, accessibility sweep, config/secrets
+  audit, backup/monitoring/recovery plan, final go/no-go. **Awaiting explicit user approval to start.**
+- Household invitations and roles; audit browsing UI; retention controls (deferred from Milestone 6).
 
 ### P2
 
@@ -246,3 +246,41 @@ concept images mapped to routes with synthetic data, Jest + Playwright + pytest 
 - No email, Gmail, Google Drive, external API or production scheduler was added or invoked. Live
   Supabase data was only migrated additively; demo owner/other accounts were never mutated destructively.
 - Checkpoint: `checkpoint/m5-2-reports-privacy`.
+
+### M6.1 Pre-deployment product alignment — 17 September 2026
+
+- Migration `c8d5e2f9a4b1` (sole Alembic head, parent `b7c4d1e8f2a3`): `connector_definitions.redistribution_allowed`/`attribution_text`;
+  `report_runs.ready_to_send_at`/`ready_to_send_by` + `ready_to_send` added to `REPORT_RELEASE_STATES`;
+  `buyer_properties.inspection_state`/`inspection_note`/`inspection_recorded_at`/`inspection_recorded_by`.
+- Locked report identities: `REPORT_TITLE` in `app/services/reports.py` is now exactly "Property Acquisition – Your Daily
+  Digest" / "...Your Weekly Report" (fixed from "...Weekly Effectiveness Report") / "...Your Monthly Assessment".
+- Versioned presentation contract: `REPORT_CONTRACT` pins an ordered, required section list per `generation_version`
+  (`digest_v1`/`weekly_v2`/`monthly_v1`); `_assert_contract()` checks section presence **and** exact title equality before
+  a run can reach `release_state="ready"`. Weekly's `generation_version` was bumped to `weekly_v2` specifically so any
+  pre-M6.1 stale run is bypassed by fresh generation (idempotency key includes generation_version).
+- Producer/delivery separation: new `POST /api/journeys/{id}/reports/{run_id}/ready-to-send` (`mark_ready_to_send` in
+  `reports.py`) freezes a `ready` run into an immutable `ready_to_send` snapshot (`ready_to_send_at`/`_by` set); repeat
+  calls return `409`. No email/notification provider is contacted — delivery stays fully disabled. Frontend: "Mark ready
+  to send" button + "Ready to send" badge + explanatory note on `/app/reports`.
+- Schedule model only (never activated): `ensure_report_schedule_jobs()` seeds three `ScheduledJob` rows per workspace
+  (`job_kind="report_release"`, `config.report_type` daily/weekly/monthly) with Australia/Perth cron
+  (`0 7 * * *` / `0 18 * * 0` / `0 7 1 * *`) and **`enabled=False` always** — called on signup (`api/auth.py`) and in
+  `scripts/seed.py` for every seeded workspace. No scheduler process reads or acts on these rows.
+- Execution telemetry: `_log_job_run()` appends a `JobRun` row (linked to the matching `ScheduledJob`) for every report
+  generate action (success/failure) and every ready-to-send action — append-only, skips gracefully if no schedule row
+  exists yet.
+- Source rights/redistribution safety: all 10 seeded `ConnectorDefinition` rows now carry `redistribution_allowed`
+  (only `email-inbound` is `true`; all portal/licensed/commercial sources are `false`) and an `attribution_text` note.
+- Manual inspection feedback: `POST /api/journeys/{id}/properties/{property_id}/inspection` (optimistic concurrency via
+  `expected_row_version`, same pattern as `/saved`); states `not_inspected`/`feedback_pending`/`great`/`ok`/`not_as_good`.
+  Never read by `services/matching.py` (verified by test). New "Inspection feedback" card
+  (`InspectionFeedback` in `Workflow.tsx`) on the Property Detail page, below "Your workflow".
+- Verification: `tests/test_m6_1_alignment.py` **10/10 passed** (locked titles+contract for all 3 report types,
+  ready-to-send transition + 409 on repeat, generate-idempotent-after-ready-to-send, inspection state/row_version,
+  inspection isolation from matching, `ScheduledJob.enabled=False` invariant across all rows, M5.x notification/task
+  regression spot checks). First testing-agent pass found one CRITICAL bug (a pre-existing demo weekly `ReportRun` kept
+  the old banned title via idempotency) — fixed by bumping `weekly_v2`, adding the title-equality contract check, and a
+  one-off DB backfill of the stale row's `snapshot.title`. Narrow frontend retest (iteration_10) confirmed the fix
+  end-to-end for both the fresh run and the backfilled historical run: **100% pass, no remaining issues.**
+- No external integration, live email delivery, or activated scheduled job was added — all strict constraints held.
+- Checkpoint: `checkpoint/m6-1-product-alignment`.
