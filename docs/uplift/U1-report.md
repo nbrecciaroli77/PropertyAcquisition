@@ -12,6 +12,9 @@ Status at a glance:
 | `test_m5_2_privacy.py` cleanup defect (+ the same defect in `test_intake.py`) | Yes | Yes | n/a |
 | Migration `d4e1f7a2b9c3` | Yes | Throwaway DB only: upgrade → downgrade → re-upgrade | **No — proposed, not executed (§10)** |
 | Land assessment | Blocked by design (U2) | Shown as "Not yet available — planned for U2" | n/a |
+| Closeout: preview database guard (fails closed, never migrates) | Yes | Yes: isolated tests + a real pod restart (§12) | **No** |
+| Closeout: meaningful house duplicate-count assertion | Yes | Yes | n/a |
+| Closeout: failure register | Yes (§13) | Baseline re-run at `32bf41d` | n/a |
 
 ## 1. Safety confirmations
 
@@ -98,19 +101,11 @@ Environment: `DATABASE_URL=<throwaway> APP_ENV=development M4_2_VERIFY_ISOLATED_
 | `pytest tests/test_m5_2_privacy.py tests/test_u1_*.py tests/test_intake.py tests/test_rate_limit.py` | **45 passed**. Users/workspaces/journeys/properties/report runs: `3/3/4/23/3` before and after, so cleanup is verified |
 | `pytest tests` (full) | **227 passed, 16 failed, 11 errors.** Every failure is pre-existing or environmental (below) |
 | `yarn typecheck` | Pass |
-| `yarn test` (Jest) | **56 passed, 2 failed.** The 2 failures are identical to the pre-U1 baseline, which I re-ran at `32bf41d` (53 passed, the same 2 failed) |
-| `yarn build` | Pass (2 pre-existing eslint warnings, same as baseline) |
+| `yarn test` (Jest) | **56 passed, 2 failed** in the final run (that run's log was not kept). The saved `test_reports/pytest/u1_jest.log` (12:09) is an earlier mid-development run with 16 failures, so it does not match this row; see §13 F7 |
+| `yarn build` | Pass (2 eslint warnings, also present at baseline) |
 | Testing agent (`test_reports/iteration_11.json`) | Frontend 17/17 items pass; cross-tenant 404s pass; no issues raised |
 
-Pre-existing failures, reported separately and not changed:
-- `test_m2_public` (12 failed + 10 errors) and `test_m3_public::TestReevaluation` (1 error): these need public signup,
-  which the preview disables (`SIGNUP_ENABLED=false`, 403 `signup_disabled`).
-- `test_m2_public::test_openapi_has_no_unsafe_or_value_score_paths`: the word "scraped" comes from the existing
-  intake schema docstring ("Never fetched or scraped"). Present at `32bf41d`.
-- `test_system::test_no_forbidden_pathways_exist`: the word "send" in the M6.1 route `/ready-to-send`. Present at `32bf41d`.
-- `test_m3a_foundation::test_migration_head_is_m3a` and `test_m4_2_migration_rollback`: both expect an old fixed
-  migration revision (`2105faf7bef7` / `a8d2e3f4b5c6`). The rollback test fails before running any downgrade.
-- Jest `auth.test` (copy text changed in M6.2) and `shell.test` (rail order).
+The full-suite failures are classified with evidence in §13. Closeout commands and results are in §12.4.
 
 Test-cleanup defects fixed: `test_m5_2_privacy.py` (per the handoff) and `test_intake.py`. The latter wrote into the
 seeded owner/other accounts and could not be re-run; it now uses tracked synthetic tenants.
@@ -137,6 +132,11 @@ The defaults change shown in screenshots 4 and 5 was a demo; the throwaway DB wa
   `test/helpers.tsx`, `__tests__/m4_2.test.tsx`
 - Ops/docs: `memory/u1_disposable_db.sh`, `memory/u1_rollback_rehearsal.py`, `memory/test_credentials.md`,
   `.emergent/system_deps.txt` (postgresql-17), this report and its screenshots
+- Closeout pass: new `backend/app/core/db_guard.py`, `backend/tests/test_u1_db_guard.py`; changed `backend/app/main.py`,
+  `backend/app/db/base.py`, `backend/app/api/system.py` (readiness), `backend/alembic/env.py`, `backend/tests/conftest.py`,
+  `backend/tests/test_u1_campaigns.py`, `memory/u1_disposable_db.sh`, this report. Local only (not in the repository):
+  `backend/.env` (+`DATABASE_TARGET=disposable`) and `/etc/supervisor/conf.d/u1_disposable_pg.conf`. Logs:
+  `test_reports/pytest/u1_closeout_*.log`
 
 ## 8. Known limitations
 
@@ -147,9 +147,8 @@ The defaults change shown in screenshots 4 and 5 was a demo; the throwaway DB wa
 - Recipient choices are limited to existing members (only the owner; invitations are not built).
 - After any campaign-specific data exists (for example, the same address in two campaigns), a schema downgrade is
   intentionally blocked. Use the code-only rollback instead (§10).
-- The preview backend currently runs on the throwaway DB. A pod restart wipes that DB (rebuild with the script). If the
-  platform resets the supervisor config, the preview would point at live Supabase with U1 code and U1 endpoints would
-  fail on the missing schema. Nothing applies a migration automatically.
+- The preview backend runs on the throwaway DB. A pod restart wipes that DB and its PostgreSQL install. After the
+  closeout pass, the preview fails closed in that case (503) and never falls back to live Supabase (§12).
 - In Jest, Radix menus take about 18 s to mount (the account menu does the same); one U1 test uses a 60 s timeout.
 
 ## 9. Checks not run
@@ -171,10 +170,14 @@ Pre-flight
 Deploy, in this order (rehearsed: the current production code runs unchanged on the U1 schema)
 4. `cd backend && DATABASE_URL=<live> alembic upgrade d4e1f7a2b9c3`. It is one revision with transactional DDL; it only adds columns, tables and constraints.
 5. Verify: `alembic current` = `d4e1f7a2b9c3`; the same report IDs and keys, all `workspace_legacy` and mapped; every journey `house` and enabled.
-6. Point the preview backend back at live (remove the supervisor `DATABASE_URL` override) and redeploy the U1 code through Emergent.
+6. Set the production configuration on its own, in the Emergent deployment secrets, never in the preview's
+   `backend/.env`: `DATABASE_TARGET=live` plus the live `DATABASE_URL`. Without `DATABASE_TARGET=live` the U1 build
+   refuses to start (§12), which is intended. Then deploy the U1 code through Emergent.
    Do **not** run `scripts/seed.py` on live: the land campaign is demo-only. The owner can create one in the UI.
-7. Live smoke: `/api/health` and `/api/readiness` return 200; owner signs in; selector shows the existing campaign;
+7. Live smoke: `/api/readiness` returns 200 `{"status":"ready"}`. A 503 with `reason` `schema_incompatible` means step 4
+   didn't apply; stop and use Tier 1. `/api/health` returns 200; owner signs in; selector shows the existing campaign;
    `/app/campaign` loads; the historical report IDs open; signup still 403; dev outbox still 404; no scheduler or integration enabled.
+8. Keep the preview on the throwaway DB (`DATABASE_TARGET=disposable`). Pointing the preview at live is a separate decision.
 
 Recovery plan
 - **Tier 1 (preferred, no data loss):** redeploy the previous production build and leave the schema at `d4e1f7a2b9c3`.
@@ -184,9 +187,94 @@ Recovery plan
   campaign attribution on notifications.
 - **Tier 3:** restore from the pre-flight dump or the Supabase backup.
 
-## 11. Actions for the owner
+## 11. Actions for the owner (see §14 for the closeout status)
 
 1. Review this report and the screenshots.
 2. Use **Save to GitHub** to publish the U1 code and report; that step gives you the commit ID.
 3. Decide whether to approve the live step in §10, and confirm the Supabase backup first.
 4. Credits used for U1: not available to me.
+
+
+## 12. Closeout: preview database guard
+
+### 12.1 What it does
+`backend/app/core/db_guard.py` checks the database target before any connection is opened. It never runs a migration.
+
+| Condition | Result |
+|---|---|
+| `DATABASE_TARGET` missing or not `disposable`/`live` | Backend refuses to start (`DatabaseTargetError`) |
+| `DATABASE_URL` missing | Refuses to start |
+| `DATABASE_TARGET=disposable` and the host is not 127.0.0.1/localhost/::1 (for example, the supervisor override was reset and only the live URL in `.env` is left) | Refuses to start. Alembic (`alembic/env.py`), `scripts/seed.py` and every `get_engine()` caller refuse in the same way |
+| `DATABASE_TARGET=live` and a loopback host | Refuses to start |
+| Database unreachable, `alembic_version` missing, or revision ≠ code head (`d4e1f7a2b9c3`) | Every `/api/*` route returns 503 `{"reason": "database_unavailable" \| "schema_missing" \| "schema_incompatible"}`. Only `/api/health` and `/api/readiness` answer, and readiness gives the reason. Rechecked every 5 s while blocked and every 30 s once healthy, so a rebuilt database is picked up without a restart |
+| In-process pytest | `conftest.py` also requires `DATABASE_TARGET=disposable` (in addition to the existing loopback-host check) |
+
+Error messages never include the URL or credentials.
+
+### 12.2 Restart and rebuild behaviour (observed during this pass)
+- The pod restarted at 21:52 UTC. PostgreSQL 17, the `postgres` OS user and `/var/lib/u1pg` were wiped. Supervisor
+  configs survived.
+- **U1 regression found and fixed:** the earlier `u1_disposable_pg` supervisor entry had `user=postgres`. With that user
+  gone, `supervisord` itself would not start ("Invalid user name postgres"), so the **whole preview was down** (502).
+  The entry now runs a shell check as root and exits cleanly when PostgreSQL is absent, so it can't block supervisord.
+  The rebuild script rewrites this entry.
+- With the guard in place and the database gone, the preview failed closed: `/api/readiness` 503
+  `{"status":"not_ready","reason":"database_unavailable"}`, `/api/health` 503, and `/api/meta` and `/api/journeys` 503 with
+  the guard message. Nothing contacted Supabase.
+- Rebuild: `bash memory/u1_disposable_db.sh` (exit 0). It reinstalled PostgreSQL, rebuilt the pre-U1 history, ran
+  `alembic upgrade head` to `d4e1f7a2b9c3` and seeded. Readiness then returned 200 without a backend restart.
+- If supervisord is not running after a pod restart: `sudo supervisord -c /etc/supervisor/supervisord.conf`, then
+  run the rebuild script.
+- `.emergent/system_deps.txt` lost and regained its `postgresql-17` line through platform commits, so it is not a
+  reliable way to keep PostgreSQL installed. The guard is the protection.
+
+### 12.3 Keeping production separate
+- The preview's `backend/.env` (git-ignored, never committed) has `DATABASE_TARGET=disposable`. The live
+  `DATABASE_URL` line in that file is unchanged and unused while the supervisor override is in place. If the override
+  is lost, that URL is refused rather than used.
+- The approved production configuration is set only in the Emergent deployment secrets: `DATABASE_TARGET=live` plus
+  the live URL (§10 step 6). It is not applied in this pass.
+
+### 12.4 Closeout commands and results (throwaway DB only)
+Each backend command printed `TARGET: 127.0.0.1:5433/pa_u1_disposable` first.
+
+| Command | Result |
+|---|---|
+| `DATABASE_URL=<throwaway> APP_ENV=development pytest -q -p no:cacheprovider tests/test_u1_db_guard.py tests/test_u1_campaigns.py tests/test_u1_report_collision.py` | **29 passed** (14 guard + 15 U1 campaign/report-collision). Users/workspaces/journeys/properties/report runs `3/3/4/23/3` before and after. Log: `test_reports/pytest/u1_closeout_focused.log` |
+| Same file before the test fix (meaningful assertion only) | 1 failed: house weekly `{'detected': 0, 'resolved': 0}` ≠ `{'detected': 1, 'resolved': 0}` (see F6) |
+| `ruff check` on the new guard module and its tests | All checks passed |
+| `CI=true yarn test --watchAll=false auth shell m4_2 m5_1` (current) | 29 passed, 2 failed (F7, F8). Log: `u1_closeout_jest_current.log` |
+| Same 4 suites at `32bf41d` (temporary worktree, deleted) | 29 passed, the **same 2** failed. Log: `u1_closeout_jest_baseline_32bf41d.log` |
+| `pytest` at `32bf41d` on a temporary local DB `pa_u1_baseline` (`c8d5e2f9a4b1`, seeded; dropped afterwards): `test_system::test_no_forbidden_pathways_exist`, `test_m3a_foundation::test_migration_head_is_m3a`, `test_m4_2_migration_rollback.py` | 3 failed, same as the U1 run (F3–F5). Log: `u1_closeout_pytest_baseline_32bf41d.log` |
+| Baseline OpenAPI generated in-process at `32bf41d` | Contains "never fetched or scraped" once (F2) |
+
+Not rerun: the full pytest suite, the full Jest suite, `yarn build`, the testing agent and screenshots. No frontend code
+changed. The screenshots and `iteration_11.json` still apply.
+
+## 13. Failure register
+
+Sources: `u1_full_suite.log` (16 failed, 11 errors), the saved `u1_jest.log`, the closeout runs in §12.4.
+
+| # | Failure | Class | Evidence | Action |
+|---|---|---|---|---|
+| F1 | `test_m2_public` 12 failed + 10 errors; `test_m3_public::TestReevaluation` 1 error (reported at setup and teardown) | Test/configuration mismatch | Every error is `403 {"detail":"signup_disabled"}` from public signup. These suites call the preview URL, where signup is off. The gate came in M6.2 (`908bb6c`), which is an ancestor of `32bf41d`. **Not re-run at baseline**: that would need the baseline code serving the preview URL | Not changed (not U1) |
+| F2 | `test_m2_public::test_openapi_has_no_unsafe_or_value_score_paths` | Demonstrated pre-existing (test vs existing schema text) | The baseline OpenAPI at `32bf41d` already contains "never fetched or scraped" (intake schema docstring) | Not changed |
+| F3 | `test_system::test_no_forbidden_pathways_exist` | Demonstrated pre-existing (test vs M6.1 route) | Fails the same way at `32bf41d`: `'send'` in `/ready-to-send` (route added in `703e585`, before U1) | Not changed |
+| F4 | `test_m3a_foundation::test_migration_head_is_m3a` | Demonstrated pre-existing (test pins an old head) | At `32bf41d`: `'c8d5e2f9a4b1' == '2105faf7bef7'` fails | Not changed |
+| F5 | `test_m4_2_migration_rollback` | Demonstrated pre-existing (test pins an old head) | At `32bf41d`: `'a8d2e3f4b5c6' in 'c8d5e2f9a4b1'` fails at the first assertion, before any downgrade. The test hard-codes `cwd=/app/backend`, so the baseline run used the current Alembic scripts. The assertion only reads the database revision, so the result holds | Not changed |
+| F6 | `test_u1_campaigns`: `house_weekly["duplicates"] == house_weekly["duplicates"]` | U1 test defect (fixed) | The self-comparison hid that the default weekly period ends at today's local midnight. The fixture's duplicate pair was outside the period, so both house and land counted 0 and the land check proved nothing | The test now requests the week starting today (Perth). It asserts house `{"detected": 1, "resolved": 0}` and keeps land `detected == 0`. Passes. No product code changed |
+| F7 | Jest `auth.test` › verification pending … delivery suppressed | Demonstrated pre-existing | Same failure at `32bf41d` (expects `/no email is delivered/`) | Not changed |
+| F8 | Jest `shell.test` › desktop rail order | Demonstrated pre-existing | Same failure at `32bf41d` (extra `"Reports"` rail item) | Not changed |
+| F9 | Saved `u1_jest.log`: 16 failed (13 `shell.test`, 1 each in `auth`, `m4_2`, `m5_1`) | Unverified cause | Not reproduced now: `m4_2`/`m5_1` pass, and only F7/F8 fail in the current and baseline runs. It was an earlier mid-development run, and its cause wasn't determined | §5 row corrected; nothing to fix |
+| F10 | `supervisord` would not start after a pod restart (preview down) | **U1 regression (fixed)** | §12.2 | Supervisor entry and rebuild script fixed |
+
+Also not fixed (lint only, outside this pass): `tests/test_u1_campaigns.py` already had about 70 ruff findings (line
+length, `UP017`) before this change.
+
+## 14. Closeout status
+- Changed files: §7 (closeout bullet).
+- Remaining blockers: owner review and **Save to GitHub** (commit SHA); a Supabase backup confirmation; the production
+  secret `DATABASE_TARGET=live` must be set at deploy time (§10 step 6); a pod restart still needs
+  `bash memory/u1_disposable_db.sh` before the preview works again (it now stays fail-closed until then).
+  Decisions on F1–F5 and F7–F8 are separate, non-U1 work.
+- No live changes, no deploy, no U2, no integrations, email or workers.

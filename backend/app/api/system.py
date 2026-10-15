@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import db_guard
 from app.core.config import FlagState, get_settings
 from app.db.base import get_db
 
@@ -44,14 +45,13 @@ async def health(response: Response, db: AsyncSession = Depends(get_db)) -> Heal
 
 
 @router.get("/readiness")
-async def readiness(response: Response, db: AsyncSession = Depends(get_db)) -> dict[str, str]:
-    """Readiness probe: returns 200 only when the database is reachable."""
-    try:
-        await db.execute(text("select 1"))
+async def readiness(response: Response) -> dict[str, str]:
+    """Readiness probe: 200 only when the database is reachable and its schema matches the code."""
+    state = await db_guard.schema_state(force=True)
+    if state.ok:
         return {"status": "ready"}
-    except Exception:
-        response.status_code = 503
-        return {"status": "not_ready"}
+    response.status_code = 503
+    return {"status": "not_ready", "reason": state.reason}
 
 
 @router.get("/meta", response_model=MetaResponse)

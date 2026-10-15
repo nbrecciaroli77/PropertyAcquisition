@@ -28,6 +28,22 @@ if [ ! -f "$DATA/PG_VERSION" ]; then
   sudo chmod 600 $DATA/server.key
   printf "listen_addresses='127.0.0.1'\nport=5433\nunix_socket_directories='/tmp'\nssl=on\n" | sudo -u postgres tee -a $DATA/postgresql.conf >/dev/null
 fi
+# Supervisor entry: runs as root and exits cleanly when PostgreSQL is absent, so a pod restart that wipes
+# the packages can never stop supervisord (and with it the whole preview) from starting.
+sudo tee /etc/supervisor/conf.d/u1_disposable_pg.conf >/dev/null <<'CONF'
+[program:u1_disposable_pg]
+command=/bin/sh -c 'id postgres >/dev/null 2>&1 && [ -x /usr/lib/postgresql/17/bin/postgres ] && [ -f /var/lib/u1pg/data/PG_VERSION ] || { echo "u1 disposable PostgreSQL not installed; run bash /app/memory/u1_disposable_db.sh"; exit 3; }; exec su postgres -s /bin/sh -c "exec /usr/lib/postgresql/17/bin/postgres -D /var/lib/u1pg/data"'
+autostart=true
+autorestart=unexpected
+exitcodes=0
+startretries=1
+priority=10
+stdout_logfile=/var/log/supervisor/u1_disposable_pg.out.log
+stderr_logfile=/var/log/supervisor/u1_disposable_pg.err.log
+stopsignal=INT
+stopasgroup=true
+CONF
+sudo supervisorctl reread >/dev/null; sudo supervisorctl update >/dev/null
 sudo supervisorctl restart u1_disposable_pg >/dev/null; sleep 3
 PSQL="$B/psql -h 127.0.0.1 -p 5433 -U postgres -d postgres -v ON_ERROR_STOP=1 -q"
 $PSQL -c "select 1 from pg_roles where rolname='u1'" -At | grep -q 1 || $PSQL -c "create role u1 login password '$PW'"

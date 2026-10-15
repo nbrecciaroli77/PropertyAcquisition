@@ -398,3 +398,10 @@ Implemented and tested on the throwaway DB only (`127.0.0.1:5433/pa_u1_disposabl
 ### Status after fork (15 October 2026)
 Owner chose to **stay paused** for review and to keep the preview backend on the throwaway DB. No code changes.
 Next: owner reviews U1 → Save to GitHub (commit SHA) → decides on the §10 live step → then U2 (land assessment).
+
+### U1 closeout pass (15 October 2026)
+- Added a preview database guard (`app/core/db_guard.py`). `DATABASE_TARGET` is required, and `disposable` requires a loopback host. Readiness and all `/api` routes return 503 if the schema revision ≠ code head or the DB is missing. Never migrates.
+- Fixed a U1 regression: the `u1_disposable_pg` supervisor entry stopped supervisord from starting after a pod restart.
+- Replaced the self-comparing house weekly duplicates assertion with `{"detected": 1, "resolved": 0}`.
+- Added the failure register (§13) to `docs/uplift/U1-report.md`, with evidence from a baseline re-run at `32bf41d`.
+- Focused tests: 29 passed. No live changes, no deploy, no U2. Awaiting owner review.

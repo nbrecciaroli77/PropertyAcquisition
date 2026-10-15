@@ -48,9 +48,11 @@ def create_app() -> FastAPI:
     from app.api.exports import router as exports_router
     from app.api.account import router as account_router
     from app.api.system import router as system_router
+    from app.core import db_guard
     from app.core.config import get_settings
     from app.db.base import dispose_engine
 
+    db_guard.check_target()
     settings = get_settings()
     app = FastAPI(title=settings.app_name, docs_url=None, redoc_url=None, openapi_url="/api/openapi.json")
 
@@ -76,6 +78,15 @@ def create_app() -> FastAPI:
                 status_code=403,
                 headers={"x-correlation-id": cid},
             )
+        if request.url.path.startswith("/api/") and request.url.path not in db_guard.EXEMPT_PATHS:
+            state = await db_guard.schema_state()
+            if not state.ok:
+                logger.error("database guard blocked request cid=%s reason=%s", cid, state.reason)
+                return JSONResponse(
+                    {"detail": "Service unavailable: database guard failed.", "reason": state.reason},
+                    status_code=503,
+                    headers={"x-correlation-id": cid},
+                )
         try:
             response: Response = await call_next(request)
         except Exception:

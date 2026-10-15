@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import get_settings
+from app.core.db_guard import check_target
 
 
 class Base(DeclarativeBase):
@@ -17,6 +18,7 @@ _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
+        check_target()
         _engine = create_async_engine(
             get_settings().database_url,
             pool_size=5,

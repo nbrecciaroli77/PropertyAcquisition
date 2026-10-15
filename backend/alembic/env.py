@@ -8,6 +8,10 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 load_dotenv()
 
+from app.core.db_guard import check_target
+
+check_target()
+
 from app.core.config import get_settings
 from app.db import models  # noqa: F401
 from app.db.base import Base

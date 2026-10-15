@@ -22,6 +22,8 @@ load_dotenv()
 _DB_HOST = urlparse(os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")).hostname
 if _DB_HOST not in ("127.0.0.1", "localhost") and os.environ.get("PA_TEST_ALLOW_REMOTE_DB") != "1":
     pytest.exit(f"Refusing to run in-process tests against non-disposable database host {_DB_HOST!r}.", returncode=4)
+if os.environ.get("DATABASE_TARGET") != "disposable" and os.environ.get("PA_TEST_ALLOW_REMOTE_DB") != "1":
+    pytest.exit("Refusing to run in-process tests unless DATABASE_TARGET=disposable.", returncode=4)
 
 from app.db.base import dispose_engine, get_sessionmaker  # noqa: E402
 from app.db.models import LoginAttempt, OutboxMessage, User, Workspace  # noqa: E402

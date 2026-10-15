@@ -5,6 +5,7 @@ tenant. Every account is tracked by exact identity and removed after each test."
 import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
@@ -352,7 +353,9 @@ async def test_notifications_and_report_counts_carry_campaign_scope(client: Asyn
     report_note = next(i for i in items if i["report_run_id"] == run["id"])
     assert report_note["journey_id"] == land and f"campaign={land}" in report_note["safe_deep_link"]
     assert all(i["journey_id"] == house for i in items if i["category"] in ("new_property", "duplicate_review"))
-    house_weekly = (await _generate(client, house, "weekly")).json()["snapshot"]
-    land_weekly = (await _generate(client, land, "weekly")).json()["snapshot"]
+    # The default weekly period ends at today's local midnight; start it today so the scan above is inside it.
+    body = {"release_kind": "preview", "week_start": datetime.now(ZoneInfo("Australia/Perth")).date().isoformat()}
+    house_weekly = (await client.post(f"/api/journeys/{house}/reports/weekly/generate", json=body)).json()["snapshot"]
+    land_weekly = (await client.post(f"/api/journeys/{land}/reports/weekly/generate", json=body)).json()["snapshot"]
     assert land_weekly["duplicates"]["detected"] == 0, "duplicate counts never bleed between campaigns"
-    assert house_weekly["duplicates"] == house_weekly["duplicates"]
+    assert house_weekly["duplicates"] == {"detected": 1, "resolved": 0}, "the 5 / 5A Cedar Court pair is one house duplicate"
