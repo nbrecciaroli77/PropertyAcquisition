@@ -360,3 +360,15 @@ credentials were changed. Headlines:
   `/app/reference/` (now `.gitignore`d) since the GitHub repo is confirmed **public** — never committed.
 - Recommended next package: **U1** (campaign scoping + idempotency-key fix), after the Supabase
   reachability blocker is resolved. Awaiting owner instruction.
+
+### U0 recovery verification (15 October 2026, same day)
+
+Owner requested a recovery-only re-check (no U1 work). Full report: `/app/docs/uplift/U0-recovery-report.md`.
+Database is **still unreachable** via the existing, unmodified `DATABASE_URL` — same pooler "tenant not
+found" error as before. New diagnostic: the project's own REST API now responds normally (`401 Invalid API
+key`, not a paused-project response), which rules out "whole project paused" and points at the
+session-pooler connection string/tenant mapping specifically needing to be regenerated from the Supabase
+dashboard (Settings → Database → Connection pooling) — an owner action, not a code or architecture change.
+No retries beyond one confirming pass were made; nothing was recreated or reconfigured. **U1 cannot safely
+begin yet.** The prior `U0-report.md` was reviewed and two items were redacted before being committed
+publicly: the Supabase project ref (replaced with `<project-ref>`) and the owner's real email address.

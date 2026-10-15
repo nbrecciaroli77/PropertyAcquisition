@@ -30,23 +30,24 @@ hardened M6.2 state. Nothing needed to be preserved beyond what the spec already
 
 ## 3. Critical blocker — live database unreachable (confirmed, not hypothesis)
 
-- `backend/.env` `DATABASE_URL` points at
-  `postgres.aecqbiuubpantklmkifs@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres` (Supabase session pooler).
-- `alembic current` fails: `asyncpg.exceptions.InternalServerError: (ENOTFOUND) tenant/user postgres.aecqbiuubpantklmkifs not found`.
+- `backend/.env` `DATABASE_URL` points at the project's Supabase session pooler
+  (`aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres`; exact project ref/tenant redacted here since
+  this report is committed to a public repository).
+- `alembic current` fails: `asyncpg.exceptions.InternalServerError: (ENOTFOUND) tenant/user <project-ref> not found`.
 - `GET /api/readiness` → `503 {"status":"not_ready"}`; `GET /api/health` → `503 {"status":"degraded","database":"unavailable"}` (both live, confirmed just now).
 - `POST /api/auth/login` with the owner credentials → `500` with a correlation id (no stack trace leaked — the
   production error handler itself is working correctly). Backend log for that correlation id traces the 500
   to `app/api/auth.py::_failures_since` failing to open a DB connection — **same root cause, not a separate auth bug.**
 - Network diagnosis performed (read-only, no mutation):
   - TCP to the pooler host (`aws-0-ap-southeast-2.pooler.supabase.com:5432`) **connects fine** — network egress/DNS for the pooler itself is not the problem.
-  - DNS for the project's own domain `aecqbiuubpantklmkifs.supabase.co` **fails to resolve at all** (`curl: (6) Could not resolve host`).
+  - DNS for the project's own `<project-ref>.supabase.co` domain **fails to resolve at all** (`curl: (6) Could not resolve host`).
   - This combination (pooler reachable, tenant not recognised + project domain NXDOMAIN) is consistent with the
     **Supabase project being paused or no longer existing** under that ref — not a pod/network defect on this side.
 - **Effect on this audit:** every DB-backed check (login, journeys, reports, exports, pytest suites that touch
   the database) could not be run live. This is recorded as *unsafe/unavailable, not run*, not as a silent pass.
   `yarn tsc --noEmit` (frontend, no DB dependency) was run and passed clean (0 errors).
 - **Action needed from the owner before any further package (U1+) or re-verification:** open the Supabase
-  dashboard for project `aecqbiuubpantklmkifs` and confirm/un-pause it, or issue a corrected `DATABASE_URL`.
+  dashboard for the configured project and confirm/un-pause it, or issue a corrected `DATABASE_URL`.
   This is outside what an audit-only, no-live-mutation pass may attempt to fix.
 - **Backup/restore claim not independently verifiable:** `memory/PRD.md` states "Supabase Free plan provides
   daily backups with 1‑day retention… PITR requires Pro." This could not be checked against the actual Supabase
@@ -113,8 +114,9 @@ validation").
   password (`Prototype2026pass`) for `owner@propertyacquisition-demo.com` / `other@…` / lockout-drill accounts.
   `memory/PRD.md` (§M6.2, lines 302‑304) states `bootstrap_owner.py` "resets demo account passwords to random
   opaque values" during the M6.2 run. This means the documented demo passwords are very likely stale/non-working,
-  and the real owner login (`nbrecciaroli@gmail.com`) used in this session is **not recorded** in
-  `test_credentials.md` at all. Could not be verified live (database unreachable — §3). Flagged as a
+  and the real owner login used in this session is **not recorded** in `test_credentials.md` at all
+  (that real email/password is intentionally omitted from this report). Could not be verified live
+  (database unreachable — §3). Flagged as a
   documentation gap for the owner/next session to correct; **not edited here**, since U0 is audit-only and the
   instruction explicitly excludes changing credentials/files.
 - **`/api/system/health` (as named in a prior hand-off note) does not exist** — the actual mounted path is
