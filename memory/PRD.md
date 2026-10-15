@@ -329,3 +329,34 @@ is needed (all migrations are additive, no destructive changes in M6.2).
 
 **Backup/recovery note:** Supabase Free plan provides daily backups with 1-day retention (upgradeable).
 Point-in-time recovery requires a Pro or higher plan. Configure in the Supabase dashboard → Settings → Backups.
+This claim is **unverified independently** — see the U0 audit below.
+
+## IDEA-010 uplift v2.0 — U0 audit (15 October 2026)
+
+Owner approved **U0 only** (audit/baseline) from the supplied IDEA-010 Uplift v2.0 pack. Full report:
+`/app/docs/uplift/U0-report.md`. No application code, data, feature flags, schedules, integrations, or
+credentials were changed. Headlines:
+
+- Workspace HEAD `19c8338` confirmed in sync with public GitHub `main` (verified live via GitHub API) and
+  is 2 platform-metadata-only commits ahead of the spec's reviewed `c075103`; recorded hardening commit
+  `908bb6c` (tag `checkpoint/m6-2-private-mvp-live`) confirmed intact. No uncommitted/newer app work existed.
+- **Blocker found:** the live Supabase database (`aecqbiuubpantklmkifs`) is currently **unreachable** from
+  this environment — DNS for the project domain fails to resolve and the pooler reports "tenant not found".
+  `/api/readiness` and `/api/health` both report degraded live. This blocks any DB-backed testing (including
+  the existing pytest suites) until the owner confirms/un-pauses the Supabase project.
+- **Confirmed code defect (R1, not a hypothesis):** `reports.py` `generate_report`'s idempotency key/lookup
+  omits `journey_id`, so two journeys in the same workspace generating the same report type/period would
+  collide (second campaign silently receives the first campaign's `ReportRun`). Targeted for U1.
+- **Confirmed gap:** report validation (`_assert_contract`) checks section-key presence + title only, not
+  full structural/link/image validation (R6/U5 scope).
+- R3 (land profile) and R5 (capture) are **not started** in code. R4/R7/R8 have partial foundations only
+  (manual/CSV intake; `ready_to_send` states; disabled `ScheduledJob`/`JobRun` rows) with no mailbox adapter,
+  outbox/queue, or scheduler process yet — matches the uplift spec's own gap predictions.
+- Minor UI gap: the `/signup` page shows a fully working form and only reveals the "Private MVP — invitation
+  only" message after a failed submit, not proactively on load (backend gate itself is correct and verified).
+- `memory/test_credentials.md` is stale after the M6.2 owner-bootstrap password rotation; not edited here
+  (audit-only, credentials excluded from this pass).
+- The uplift pack's `reference-assets/` is self-marked `"private_reference_only": true`; extracted to
+  `/app/reference/` (now `.gitignore`d) since the GitHub repo is confirmed **public** — never committed.
+- Recommended next package: **U1** (campaign scoping + idempotency-key fix), after the Supabase
+  reachability blocker is resolved. Awaiting owner instruction.
