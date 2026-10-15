@@ -42,6 +42,7 @@ from app.schemas.properties import (
     WaiverCreate,
     WaiverOut,
 )
+from app.services.campaigns import assessment_profile
 from app.services.properties import (
     ALLOWED_TRANSITIONS,
     active_waivers,
@@ -163,7 +164,7 @@ async def _summaries(
     ).all():
         facts[f.property_id][f.key] = _fact_out(f, o)
     evaluations: dict[uuid.UUID, MatchEvaluation] = {}
-    if journey.current_version_id is not None:
+    if journey.current_version_id is not None and (await assessment_profile(db, journey))[1]:
         for ev in (
             (
                 await db.execute(

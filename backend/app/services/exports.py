@@ -18,6 +18,7 @@ from app.db.models import (
     AuditEvent,
     BriefVersion,
     BuyerProperty,
+    CampaignConfigVersion,
     ConnectorInstance,
     CsvImportBatch,
     DataExport,
@@ -37,6 +38,7 @@ from app.db.models import (
     PropertyTask,
     RecipientNotification,
     ReportRun,
+    ReportRunLegacyMapping,
     SenderAlias,
     SourceReadiness,
     User,
@@ -137,6 +139,8 @@ async def build_workspace_export(db: AsyncSession, *, workspace: Workspace) -> t
     source_readiness = await rows(SourceReadiness, SourceReadiness.workspace_id == workspace.id)
     sender_aliases = await rows(SenderAlias, SenderAlias.workspace_id == workspace.id)
     audit_events = await rows(AuditEvent, AuditEvent.workspace_id == workspace.id)
+    campaign_configs = await rows(CampaignConfigVersion, CampaignConfigVersion.workspace_id == workspace.id)
+    legacy_mappings = await rows(ReportRunLegacyMapping, ReportRunLegacyMapping.workspace_id == workspace.id)
 
     manifest = {
         "export_type": "workspace",
@@ -149,6 +153,7 @@ async def build_workspace_export(db: AsyncSession, *, workspace: Workspace) -> t
             "property_tasks.json", "activity_events.json", "intake_events.json", "csv_import_batches.json",
             "discovery_events.json", "duplicate_proposals.json", "notification_events.json", "report_runs.json",
             "connector_instances.json", "source_readiness.json", "sender_aliases.json", "audit_events.json",
+            "campaign_config_versions.json", "report_run_legacy_mappings.json",
         ],
         "excludes": ["password hashes", "session/refresh tokens", "verification/reset tokens", "credential references", "other workspaces' data"],
     }
@@ -177,6 +182,8 @@ async def build_workspace_export(db: AsyncSession, *, workspace: Workspace) -> t
         _write_json(zf, "source_readiness.json", [_row_dict(s) for s in source_readiness])
         _write_json(zf, "sender_aliases.json", [_row_dict(s) for s in sender_aliases])
         _write_json(zf, "audit_events.json", [_row_dict(a) for a in audit_events])
+        _write_json(zf, "campaign_config_versions.json", [_row_dict(c) for c in campaign_configs])
+        _write_json(zf, "report_run_legacy_mappings.json", [_row_dict(m) for m in legacy_mappings])
     return buffer.getvalue(), manifest
 
 

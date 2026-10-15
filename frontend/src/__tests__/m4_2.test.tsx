@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CsvTab } from "../features/intake/CsvTab";
-import DuplicatesPage from "../features/duplicates/DuplicatesPage";
 import { csvIntakeApi } from "../lib/csvIntake";
 import { duplicatesApi } from "../lib/duplicates";
+import { JOURNEY, mockApi, renderAt } from "../test/helpers";
 
 describe("M4.2 CSV and duplicate-review UI", () => {
   afterEach(() => jest.restoreAllMocks());
@@ -37,10 +37,12 @@ describe("M4.2 CSV and duplicate-review UI", () => {
       property_a: { id: "a", address_line: "81A Test Street", suburb: "Nedlands", state: "WA", postcode: "6009", normalised_address: "a", fact_count: 1, created_at: null, earliest_discovery: null, merged_into_id: null },
       property_b: { id: "b", address_line: "81C Test Street", suburb: "Nedlands", state: "WA", postcode: "6009", normalised_address: "b", fact_count: 1, created_at: null, earliest_discovery: null, merged_into_id: null },
     };
-    jest.spyOn(duplicatesApi, "list").mockResolvedValue({ items: [proposal], pending_count: 1, total_count: 1 });
+    mockApi();
+    const listed = jest.spyOn(duplicatesApi, "list").mockResolvedValue({ items: [proposal], pending_count: 1, total_count: 1 });
     const rejected = jest.spyOn(duplicatesApi, "reject").mockResolvedValue({ ...proposal, state: "rejected", row_version: 2 });
-    render(<DuplicatesPage />);
+    renderAt("/app/duplicates");
     expect(await screen.findByTestId("dup-proposal-proposal-1")).toBeInTheDocument();
+    expect(listed).toHaveBeenCalledWith(JOURNEY.id, undefined);
     expect(screen.getByTestId("dup-unit-suffix-warning")).toBeInTheDocument();
     await userEvent.click(screen.getByTestId("dup-action-reject"));
     await waitFor(() => expect(rejected).toHaveBeenCalledWith("proposal-1", 1, undefined));

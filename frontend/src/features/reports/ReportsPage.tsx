@@ -1,9 +1,11 @@
 import { FileBarChart2, Printer, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "../../components/Button";
 import { PageHeader } from "../../components/Page";
 import { EmptyState, Skeleton } from "../../components/States";
 import { StatusChip } from "../../components/StatusChip";
+import { campaignApi } from "../../lib/campaigns";
 import { formatDate } from "../../lib/format";
 import { useJourneys } from "../../lib/journey";
 import { reportApi, type ReportRun, type ReportType } from "../../lib/reports";
@@ -16,8 +18,12 @@ const TABS: { value: ReportType; label: string }[] = [
 ];
 
 export default function ReportsPage() {
-  const { active, loading: journeyLoading } = useJourneys();
-  const [tab, setTab] = useState<ReportType>("daily");
+  const { active, journeys, setActiveId, loading: journeyLoading } = useJourneys();
+  const [params] = useSearchParams();
+  const wantedRun = params.get("run");
+  const [tab, setTab] = useState<ReportType>(() => TABS.find((t) => t.value === params.get("type"))?.value ?? "daily");
+  const [linkNotice, setLinkNotice] = useState<string | null>(null);
+  const runHandled = useRef(false);
   const [runs, setRuns] = useState<ReportRun[] | null>(null);
   const [selected, setSelected] = useState<ReportRun | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,9 +34,14 @@ export default function ReportsPage() {
     if (!active) return;
     try {
       const list = await reportApi.list(active.id, tab);
+      const linked = !runHandled.current && wantedRun ? list.find((r) => r.id === wantedRun) : undefined;
       setRuns(list);
-      setSelected(list[0] ?? null);
+      setSelected(linked ?? list[0] ?? null);
       setError(null);
+      if (wantedRun && !runHandled.current) {
+        runHandled.current = true;
+        if (!linked) void openLinkedRun(wantedRun);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Reports could not be loaded.");
       setRuns([]);
@@ -38,6 +49,26 @@ export default function ReportsPage() {
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void load(); }, [active?.id, tab]);
+
+  /** Older links carry only ?run=; a run opens only inside the campaign that owns it. */
+  const openLinkedRun = async (runId: string) => {
+    if (!active) return;
+    try {
+      const location = await campaignApi.locateRun(runId);
+      if (location.journey_id !== active.id && journeys.some((j) => j.id === location.journey_id)) {
+        setActiveId(location.journey_id);
+        return;
+      }
+      if (location.journey_id === active.id && location.report_type !== tab) {
+        runHandled.current = false;
+        setTab(location.report_type as ReportType);
+        return;
+      }
+    } catch {
+      // Not found in this workspace: fall through to the notice.
+    }
+    setLinkNotice("That report is not part of this campaign, or it no longer exists.");
+  };
 
   const generate = async () => {
     if (!active) return;
@@ -81,7 +112,7 @@ export default function ReportsPage() {
       <PageHeader
         eyebrow="Reports"
         title="Report previews"
-        description="Application-generated previews from your own data. Nothing is emailed — every report opens here, on demand."
+        description={`Previews for ${active.name}, generated from this campaign's data only. Nothing is emailed — every report opens here, on demand.`}
         testId="reports-header"
         actions={
           <Button variant="secondary" size="sm" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()} className="print:hidden" data-testid="reports-print">
@@ -109,6 +140,7 @@ export default function ReportsPage() {
         </Button>
       </div>
 
+      {linkNotice && <p role="status" className="mb-4 rounded-md border border-border bg-canvas-deep p-3 text-sm" data-testid="reports-link-notice">{linkNotice}</p>}
       {error && <p role="alert" className="mb-4 rounded-md border border-risk/40 bg-risk-soft p-3 text-sm text-risk" data-testid="reports-error">{error}</p>}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -150,6 +182,11 @@ export default function ReportsPage() {
                       {run.release_state}
                     </StatusChip>
                   </div>
+                  {run.idempotency_scope === "workspace_legacy" && (
+                    <span className="mt-1 inline-block text-[11px] font-semibold text-navy" title="Created before campaign separation. Its ID and links are preserved." data-testid={`reports-history-legacy-${run.id}`}>
+                      Historical run · ID preserved
+                    </span>
+                  )}
                   <div className="mt-1 text-xs text-muted">
                     {run.kind.replace("_", " ")} · {run.period_start ? formatDate(run.period_start) : "—"} → {run.period_end ? formatDate(run.period_end) : "—"}
                   </div>

@@ -9,6 +9,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import now_utc
@@ -27,9 +28,11 @@ from app.db.models import (
     Property,
     PropertyTask,
     ReportRun,
+    ReportRunLegacyMapping,
     ScheduledJob,
     SourceReadiness,
 )
+from app.services.campaigns import effective_timezone, require_production_allowed
 from app.services.notifications import create_notification_event
 from app.services.properties import freshness_band
 
@@ -383,8 +386,11 @@ async def _weekly_snapshot(db: AsyncSession, journey: Journey, *, period_start: 
     hard_failures = sum(1 for e in evaluations if e.verdict == "fail")
     withdrawn = (
         await db.execute(
-            select(func.count()).select_from(ListingCampaign).where(
-                ListingCampaign.workspace_id == journey.workspace_id, ListingCampaign.market_state.in_(("withdrawn", "sold")),
+            select(func.count()).select_from(ListingCampaign)
+            .join(BuyerProperty, BuyerProperty.property_id == ListingCampaign.property_id)
+            .where(
+                ListingCampaign.workspace_id == journey.workspace_id, BuyerProperty.journey_id == journey.id,
+                ListingCampaign.market_state.in_(("withdrawn", "sold")),
                 ListingCampaign.updated_at >= period_start, ListingCampaign.updated_at < period_end,
             )
         )
@@ -405,15 +411,21 @@ async def _weekly_snapshot(db: AsyncSession, journey: Journey, *, period_start: 
     ).scalar_one()
     duplicates_detected = (
         await db.execute(
-            select(func.count()).select_from(DuplicateProposal).where(
-                DuplicateProposal.workspace_id == journey.workspace_id, DuplicateProposal.created_at >= period_start, DuplicateProposal.created_at < period_end
+            select(func.count()).select_from(DuplicateProposal)
+            .join(Property, Property.id == DuplicateProposal.property_id_a)
+            .where(
+                DuplicateProposal.workspace_id == journey.workspace_id, Property.journey_id == journey.id,
+                DuplicateProposal.created_at >= period_start, DuplicateProposal.created_at < period_end,
             )
         )
     ).scalar_one()
     duplicates_resolved = (
         await db.execute(
-            select(func.count()).select_from(DuplicateProposal).where(
-                DuplicateProposal.workspace_id == journey.workspace_id, DuplicateProposal.state.in_(("confirmed", "rejected", "undone")),
+            select(func.count()).select_from(DuplicateProposal)
+            .join(Property, Property.id == DuplicateProposal.property_id_a)
+            .where(
+                DuplicateProposal.workspace_id == journey.workspace_id, Property.journey_id == journey.id,
+                DuplicateProposal.state.in_(("confirmed", "rejected", "undone")),
                 DuplicateProposal.reviewed_at >= period_start, DuplicateProposal.reviewed_at < period_end,
             )
         )
@@ -457,7 +469,13 @@ async def _weekly_snapshot(db: AsyncSession, journey: Journey, *, period_start: 
         for d in discoveries:
             if d.channel != channel:
                 continue
-            passed = (await db.execute(select(MatchEvaluation.id).where(MatchEvaluation.property_id == d.property_id, MatchEvaluation.verdict == "pass"))).first()
+            passed = (
+                await db.execute(
+                    select(MatchEvaluation.id).where(
+                        MatchEvaluation.journey_id == journey.id, MatchEvaluation.property_id == d.property_id, MatchEvaluation.verdict == "pass"
+                    )
+                )
+            ).first()
             if passed is not None:
                 converted += 1
         funnel.append({"channel": channel, "first_discoveries": count, "reached_pass": converted, "conversion_rate": round(100 * converted / count) if count else None})
@@ -485,9 +503,9 @@ async def _weekly_snapshot(db: AsyncSession, journey: Journey, *, period_start: 
 
 
 async def _monthly_snapshot(
-    db: AsyncSession, journey: Journey, *, period_start: datetime, period_end: datetime
+    db: AsyncSession, journey: Journey, *, period_start: datetime, period_end: datetime, coverage_floor: datetime
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    actual_start = max(period_start, journey.created_at)
+    actual_start = max(period_start, coverage_floor)
     partial = actual_start > period_start
     properties_added = (
         await db.execute(
@@ -523,8 +541,11 @@ async def _monthly_snapshot(
     ).scalar_one()
     duplicates = (
         await db.execute(
-            select(func.count()).select_from(DuplicateProposal).where(
-                DuplicateProposal.workspace_id == journey.workspace_id, DuplicateProposal.created_at >= actual_start, DuplicateProposal.created_at < period_end
+            select(func.count()).select_from(DuplicateProposal)
+            .join(Property, Property.id == DuplicateProposal.property_id_a)
+            .where(
+                DuplicateProposal.workspace_id == journey.workspace_id, Property.journey_id == journey.id,
+                DuplicateProposal.created_at >= actual_start, DuplicateProposal.created_at < period_end,
             )
         )
     ).scalar_one()
@@ -577,6 +598,37 @@ async def _monthly_snapshot(
     return snapshot, coverage_summary
 
 
+def campaign_report_key(
+    journey_id: uuid.UUID, report_type: str, release_kind: str, period_start: datetime, period_end: datetime, generation_version: str
+) -> str:
+    """Campaign-scoped identity: campaign, report type, run mode (QA/manual/production) and period."""
+    return f"c1:{journey_id}:{report_type}:{release_kind}:{period_start.isoformat()}:{period_end.isoformat()}:{generation_version}"
+
+
+def legacy_report_key(report_type: str, release_kind: str, period_start: datetime, period_end: datetime, generation_version: str) -> str:
+    """Pre-U1 workspace-scoped key. Only ever used to find a mapped run of the same campaign."""
+    return f"{report_type}:{release_kind}:{period_start.isoformat()}:{period_end.isoformat()}:{generation_version}"
+
+
+async def _locked_run(db: AsyncSession, *conditions: Any) -> ReportRun | None:
+    return (
+        await db.execute(select(ReportRun).where(*conditions).with_for_update().execution_options(populate_existing=True))
+    ).scalar_one_or_none()
+
+
+async def _mapped_legacy_run(db: AsyncSession, journey: Journey, legacy_key: str) -> ReportRun | None:
+    return await _locked_run(
+        db,
+        ReportRun.id == select(ReportRunLegacyMapping.report_run_id).where(
+            ReportRunLegacyMapping.workspace_id == journey.workspace_id,
+            ReportRunLegacyMapping.journey_id == journey.id,
+            ReportRunLegacyMapping.legacy_idempotency_key == legacy_key,
+        ).scalar_subquery(),
+        ReportRun.workspace_id == journey.workspace_id,
+        ReportRun.journey_id == journey.id,
+    )
+
+
 async def generate_report(
     db: AsyncSession,
     *,
@@ -589,46 +641,54 @@ async def generate_report(
     month: int | None = None,
     week_start: str | None = None,
 ) -> ReportRun:
-    """Idempotent per (workspace, report type, period, release kind). A replay of an
-    identical request returns the existing ready run without a duplicate notification."""
+    """Idempotent per (workspace, buyer campaign, report type, run mode, period). A replay returns
+    only this campaign's run; concurrent identical requests converge on one row via the unique
+    key plus a row lock. A pre-U1 run is reused only through its explicit legacy mapping."""
     moment = now or now_utc()
-    tz_name = journey.timezone or "Australia/Perth"
+    tz_name = await effective_timezone(db, journey)
     period_start, period_end, cutoff_at, _ = _period_for(report_type, tz_name, moment, year=year, month=month, week_start=week_start)
+    coverage_floor = journey.created_at
+    if release_kind == "production":
+        activated_at = await require_production_allowed(db, journey, period_end=period_end, now=moment)
+        coverage_floor = max(coverage_floor, activated_at)
     generation_version = GENERATION_VERSIONS[report_type]
-    idem_key = f"{report_type}:{release_kind}:{period_start.isoformat()}:{period_end.isoformat()}:{generation_version}"
-    existing = (
-        await db.execute(select(ReportRun).where(ReportRun.workspace_id == journey.workspace_id, ReportRun.idempotency_key == idem_key))
-    ).scalar_one_or_none()
+    run = await _mapped_legacy_run(db, journey, legacy_report_key(report_type, release_kind, period_start, period_end, generation_version))
+    if run is None:
+        key = campaign_report_key(journey.id, report_type, release_kind, period_start, period_end, generation_version)
+        await db.execute(
+            pg_insert(ReportRun)
+            .values(
+                id=uuid.uuid4(), workspace_id=journey.workspace_id, journey_id=journey.id, idempotency_key=key,
+                idempotency_scope="campaign", kind=release_kind, report_type=report_type, release_state="generating",
+                recipient_count=0, period_start=period_start, period_end=period_end, cutoff_at=cutoff_at, timezone=tz_name,
+                generation_version=generation_version, is_partial_period=False, snapshot={}, detail={},
+            )
+            .on_conflict_do_nothing(constraint="uq_report_run_workspace_journey_key")
+        )
+        run = await _locked_run(
+            db, ReportRun.workspace_id == journey.workspace_id, ReportRun.journey_id == journey.id, ReportRun.idempotency_key == key
+        )
+        assert run is not None
     # "ready" and "ready_to_send" are both final producer states — a ready_to_send run
     # is an immutable snapshot and must never be regenerated in place.
-    if existing is not None and existing.release_state in ("ready", "ready_to_send"):
-        return existing
-    run = existing
-    if run is None:
-        run = ReportRun(
-            workspace_id=journey.workspace_id, journey_id=journey.id, idempotency_key=idem_key, kind=release_kind,
-            report_type=report_type, release_state="generating", period_start=period_start, period_end=period_end,
-            cutoff_at=cutoff_at, timezone=tz_name, generation_version=generation_version, detail={},
-        )
-        db.add(run)
-        await db.flush()
-    else:
-        run.release_state = "generating"
+    if run.release_state in ("ready", "ready_to_send"):
+        return run
+    run.release_state = "generating"
+    telemetry = {"action": "generate", "release_kind": release_kind, "report_run_id": str(run.id), "journey_id": str(journey.id)}
     try:
         if report_type == "daily":
             snapshot, coverage = await _daily_snapshot(db, journey, period_start=period_start, cutoff_at=cutoff_at)
         elif report_type == "weekly":
             snapshot, coverage = await _weekly_snapshot(db, journey, period_start=period_start, period_end=period_end)
         else:
-            snapshot, coverage = await _monthly_snapshot(db, journey, period_start=period_start, period_end=period_end)
+            snapshot, coverage = await _monthly_snapshot(db, journey, period_start=period_start, period_end=period_end, coverage_floor=coverage_floor)
         _assert_contract(report_type, snapshot)
     except Exception as exc:
         run.release_state = "failed"
         run.failure_reason = str(exc)[:400]
         await _log_job_run(
             db, workspace_id=journey.workspace_id, report_type=report_type, run_state="failed",
-            detail={"action": "generate", "release_kind": release_kind, "report_run_id": str(run.id)},
-            now=moment, failure_reason=str(exc)[:400],
+            detail=telemetry, now=moment, failure_reason=str(exc)[:400],
         )
         await db.flush()
         raise
@@ -638,14 +698,11 @@ async def generate_report(
     run.release_state = "ready"
     run.generated_at = moment
     await db.flush()
-    await _log_job_run(
-        db, workspace_id=journey.workspace_id, report_type=report_type, run_state="completed",
-        detail={"action": "generate", "release_kind": release_kind, "report_run_id": str(run.id)}, now=moment,
-    )
+    await _log_job_run(db, workspace_id=journey.workspace_id, report_type=report_type, run_state="completed", detail=telemetry, now=moment)
     await create_notification_event(
-        db, workspace_id=journey.workspace_id, category=REPORT_CATEGORY[report_type], fingerprint=f"report:{run.id}",
-        title=snapshot.get("title", "Report ready"), message="Your report preview is ready to view.",
-        safe_deep_link=f"/app/reports?type={report_type}&run={run.id}", priority="normal", report_run_id=run.id, now=moment,
+        db, workspace_id=journey.workspace_id, journey_id=journey.id, category=REPORT_CATEGORY[report_type], fingerprint=f"report:{run.id}",
+        title=snapshot.get("title", "Report ready"), message=f"Your report preview for {journey.name} is ready to view.",
+        safe_deep_link=f"/app/reports?campaign={journey.id}&type={report_type}&run={run.id}", priority="normal", report_run_id=run.id, now=moment,
     )
     return run
 

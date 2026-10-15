@@ -135,7 +135,9 @@ async def load_demo_properties(db: AsyncSession, journey: Journey, actor_id: uui
         exists = (
             await db.execute(
                 select(Property.id).where(
-                    Property.workspace_id == journey.workspace_id, Property.normalised_address == key
+                    Property.workspace_id == journey.workspace_id,
+                    Property.journey_id == journey.id,
+                    Property.normalised_address == key,
                 )
             )
         ).scalar_one_or_none()
@@ -341,6 +343,24 @@ async def evaluate_property(db: AsyncSession, prop: Property, version: BriefVers
 async def reevaluate_journey(
     db: AsyncSession, journey: Journey, version: BriefVersion, actor_id: uuid.UUID | None
 ) -> int:
+    from app.services.campaigns import assessment_profile
+
+    profile_id, available = await assessment_profile(db, journey)
+    if not available:
+        # Fail closed: an unavailable profile is never substituted with another campaign's rules.
+        version.reevaluation_state = "skipped_profile_unavailable"
+        db.add(
+            ActivityEvent(
+                workspace_id=journey.workspace_id,
+                journey_id=journey.id,
+                kind="reevaluation",
+                summary=f"Assessment skipped: profile {profile_id} is not available yet",
+                detail={"brief_version_no": version.version_no, "assessment_profile": profile_id},
+                actor_user_id=actor_id,
+            )
+        )
+        await db.flush()
+        return 0
     props = (await db.execute(select(Property).where(Property.journey_id == journey.id))).scalars().all()
     for prop in props:
         await evaluate_property(db, prop, version)
@@ -360,7 +380,9 @@ async def reevaluate_journey(
 
 
 async def current_evaluation(db: AsyncSession, prop: Property, journey: Journey) -> MatchEvaluation | None:
-    if journey.current_version_id is None:
+    from app.services.campaigns import assessment_profile
+
+    if journey.current_version_id is None or not (await assessment_profile(db, journey))[1]:
         return None
     ev = (
         await db.execute(

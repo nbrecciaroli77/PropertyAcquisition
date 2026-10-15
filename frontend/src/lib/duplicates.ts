@@ -39,9 +39,9 @@ export interface DuplicateListResponse {
 }
 
 export const duplicatesApi = {
-  list: (state?: string): Promise<DuplicateListResponse> => {
-    const qs = state ? `?state=${state}` : "";
-    return apiFetch<DuplicateListResponse>(`/workspaces/me/duplicates${qs}`);
+  list: (journeyId: string, state?: string): Promise<DuplicateListResponse> => {
+    const qs = new URLSearchParams({ journey_id: journeyId, ...(state ? { state } : {}) });
+    return apiFetch<DuplicateListResponse>(`/workspaces/me/duplicates?${qs.toString()}`);
   },
 
   get: (id: string): Promise<DuplicateProposal> =>

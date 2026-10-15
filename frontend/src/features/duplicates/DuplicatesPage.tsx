@@ -27,6 +27,7 @@ import { StatusChip, type ChipTone } from "../../components/StatusChip";
 import { ErrorState, Skeleton } from "../../components/States";
 import { duplicatesApi, type DuplicateProposal, type PropertySummary } from "../../lib/duplicates";
 import { ApiError } from "../../lib/api";
+import { useJourneys } from "../../lib/journey";
 
 // ── State chips ───────────────────────────────────────────────────────────────
 
@@ -323,6 +324,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DuplicatesPage() {
+  const { active } = useJourneys();
   const [filter, setFilter] = useState<Filter>("all");
   const [items, setItems] = useState<DuplicateProposal[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -331,18 +333,19 @@ export default function DuplicatesPage() {
   const [scanMsg, setScanMsg] = useState<string | null>(null);
 
   const load = useCallback(async (stateFilter?: Filter) => {
+    if (!active) return;
     setLoadState("loading");
     setErrMsg(null);
     try {
       const f = stateFilter ?? filter;
-      const resp = await duplicatesApi.list(f === "all" ? undefined : f);
+      const resp = await duplicatesApi.list(active.id, f === "all" ? undefined : f);
       setItems(resp.items);
       setLoadState("ready");
     } catch (e) {
       setErrMsg(e instanceof ApiError ? e.message : String(e));
       setLoadState("error");
     }
-  }, [filter]);
+  }, [filter, active]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -382,7 +385,7 @@ export default function DuplicatesPage() {
       <PageHeader
         eyebrow="Duplicate Review"
         title="Proposed matches"
-        description="Properties that may be duplicates. Review each pair carefully before confirming or rejecting a merge. All merges are reversible via Undo or Split."
+        description={`Possible duplicates within ${active?.name ?? "this campaign"} only — properties are never matched across campaigns. Review each pair before confirming or rejecting. All merges are reversible via Undo or Split.`}
         testId="duplicates-header"
         actions={
           <div className="flex gap-2">

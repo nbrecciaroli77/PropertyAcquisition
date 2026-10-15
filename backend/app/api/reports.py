@@ -29,7 +29,8 @@ DEFAULTS: dict[str, dict[str, object]] = {
 def _run_out(run: ReportRun) -> ReportRunOut:
     return ReportRunOut(
         id=run.id, journey_id=run.journey_id, report_type=run.report_type, kind=run.kind,
-        release_state=run.release_state, idempotency_key=run.idempotency_key, period_start=run.period_start,
+        release_state=run.release_state, idempotency_key=run.idempotency_key,
+        idempotency_scope=run.idempotency_scope, period_start=run.period_start,
         period_end=run.period_end, cutoff_at=run.cutoff_at, timezone=run.timezone,
         generation_version=run.generation_version, is_partial_period=run.is_partial_period,
         failure_reason=run.failure_reason, generated_at=run.generated_at, ready_to_send_at=run.ready_to_send_at,

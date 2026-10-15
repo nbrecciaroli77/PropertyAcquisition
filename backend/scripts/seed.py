@@ -18,6 +18,7 @@ from app.core.security import hash_password, now_utc  # noqa: E402
 from app.db.base import dispose_engine, get_sessionmaker  # noqa: E402
 from app.db.models import (  # noqa: E402
     BriefVersion,
+    CampaignConfigVersion,
     ConnectorDefinition,
     ConnectorInstance,
     Journey,
@@ -30,6 +31,8 @@ from app.db.models import (  # noqa: E402
     Workspace,
 )
 from app.schemas.brief import Area, BriefPayload, default_brief  # noqa: E402
+from app.schemas.intake import FactsIn, IntakeRequest, PriceIn, StructuredPayload  # noqa: E402
+from app.services.intake import process_intake  # noqa: E402
 from app.services.properties import load_demo_properties, reevaluate_journey  # noqa: E402
 from app.services.notifications import create_notification_event  # noqa: E402
 from app.services.reports import ensure_report_schedule_jobs  # noqa: E402
@@ -459,6 +462,50 @@ async def _seed_demo_notifications(db: AsyncSession, workspace_id: object, journ
     )
 
 
+SYNTHETIC_LAND_LISTINGS = [
+    # Synthetic only. The first address deliberately repeats a house-campaign fixture address to
+    # demonstrate that the same address is an independent record in each buyer campaign.
+    {"address_line": "12 Banksia Crescent", "suburb": "Example Park", "state": "WA", "land_sqm": 612, "raw_price": "$189,000"},
+    {"address_line": "Lot 7 Example Ridge Road", "suburb": "Example Coast", "state": "WA", "land_sqm": 1450, "raw_price": "Offers over $175,000"},
+]
+
+
+async def _seed_land_campaign(db: AsyncSession, workspace_id: object, user: User) -> None:
+    """Second buyer campaign in the demo workspace (U1). Land assessment itself is U2."""
+    land = (
+        await db.execute(select(Journey).where(Journey.workspace_id == workspace_id, Journey.campaign_kind == "land"))
+    ).scalars().first()
+    if land is None:
+        land = Journey(
+            workspace_id=workspace_id, name="Synthetic down-south land", status="active", onboarding_step=6,
+            onboarding_completed_at=now_utc(), campaign_kind="land", draft_payload=default_brief().model_dump(),
+            created_by=user.id,
+        )
+        db.add(land)
+        await db.flush()
+        db.add(
+            CampaignConfigVersion(
+                workspace_id=workspace_id, scope="campaign", journey_id=land.id, version_no=1,
+                settings={"assessment_profile": "LAND_FEASIBILITY_V1", "delivery_mode": "separate"},
+                reason="Seeded synthetic land campaign", actor_user_id=user.id,
+            )
+        )
+        await db.flush()
+    for listing in SYNTHETIC_LAND_LISTINGS:
+        await process_intake(
+            db, land, user.id,
+            IntakeRequest(
+                mode="structured_form",
+                structured=StructuredPayload(
+                    address_line=listing["address_line"], suburb=listing["suburb"], state=listing["state"],
+                    facts=FactsIn(land_sqm=listing["land_sqm"], property_type="land"),
+                    price=PriceIn(price_kind="offers_over" if "Offers" in listing["raw_price"] else "exact", raw_price=listing["raw_price"]),
+                    notes="Synthetic land listing for campaign-isolation demonstration.",
+                ),
+            ),
+        )
+
+
 def _seed_brief() -> BriefPayload:
     """Aligned with fixtures/demo-data.json: ceiling $1.3m, detached house, 3 beds, 1 bath, 400 m² land."""
     brief = default_brief()
@@ -513,7 +560,12 @@ async def _seed_account(db: AsyncSession, spec: dict) -> None:
     await ensure_report_schedule_jobs(db, workspace.id)
 
     journey = (
-        await db.execute(select(Journey).where(Journey.workspace_id == workspace.id))
+        await db.execute(
+            select(Journey)
+            .where(Journey.workspace_id == workspace.id, Journey.campaign_kind == "house")
+            .order_by(Journey.created_at)
+            .limit(1)
+        )
     ).scalar_one_or_none()
     if journey is None:
         brief = _seed_brief()
@@ -595,6 +647,7 @@ async def _seed_account(db: AsyncSession, spec: dict) -> None:
         await _seed_demo_aliases(db, workspace.id)
         await _seed_demo_instances(db, workspace.id, user.id)
         await _seed_demo_notifications(db, workspace.id, journey, user)
+        await _seed_land_campaign(db, workspace.id, user)
     print(
         f"seeded {email} · workspace {workspace.name} · journey {journey.name} · "
         f"{created} fixture properties added · {evaluated} evaluated against brief v{version.version_no}"

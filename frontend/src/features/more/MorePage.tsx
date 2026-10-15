@@ -1,4 +1,4 @@
-import { ChevronRight, CircleHelp, LogOut } from "lucide-react";
+import { ChevronRight, CircleHelp, LogOut, SlidersHorizontal } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/Page";
 import { useAuth } from "../../lib/auth";
@@ -43,6 +43,13 @@ export default function MorePage() {
               </Link>
             </li>
           ))}
+          <li>
+            <Link to="/app/campaign" className="flex min-h-[52px] items-center gap-3 px-4 text-[15px] font-medium hover:bg-canvas" data-testid="more-campaign-settings">
+              <SlidersHorizontal className="h-5 w-5 text-eucalyptus-deep" aria-hidden="true" />
+              Campaign settings
+              <ChevronRight className="ml-auto h-4 w-4 text-muted" aria-hidden="true" />
+            </Link>
+          </li>
           <li>
             <Link to="/about" className="flex min-h-[52px] items-center gap-3 px-4 text-[15px] font-medium hover:bg-canvas" data-testid="more-help">
               <CircleHelp className="h-5 w-5 text-eucalyptus-deep" aria-hidden="true" />

@@ -12,6 +12,7 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.campaigns import require_accepting_intake
 from app.core.deps import AuthContext, get_auth, require_writer, scoped_journey
 from app.db.base import get_db
 from app.db.models import CsvImportBatch
@@ -83,6 +84,7 @@ async def csv_import(
 ) -> CsvBatchResult:
     require_writer(auth)
     journey = await scoped_journey(journey_id, db, auth.workspace.id)
+    require_accepting_intake(journey)
 
     content = await file.read()
     filename = file.filename or "upload.csv"

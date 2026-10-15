@@ -61,3 +61,10 @@ automatically so tests can still read tokens:
 - Owner journey "Perth family home 2026" holds the 7 fixture properties (DEMO-001..007); brief is at v3 (v2/v3 identical, fixture-aligned).
 - Dev fixture loader for any signed-in writer: `POST /api/dev/load-demo-properties {"journey_id": ...}` (development only).
 - Playwright: `E2E_BASE_URL=<REACT_APP_BACKEND_URL> PW_CHROMIUM_PATH=/pw-browsers/chromium_headless_shell-1208/chrome-linux/headless_shell npx playwright test`.
+
+## U1 notes (15 Oct 2026) — preview runs on the THROWAWAY database only
+- Preview backend DATABASE_URL (supervisor) = local PostgreSQL 17 at 127.0.0.1:5433/pa_u1_disposable. Live Supabase is never touched.
+- Rebuild it any time (pod restarts wipe it): `bash /app/memory/u1_disposable_db.sh` (pre-U1 schema + seed + historical reports, then U1 migration + U1 seed).
+- Owner workspace has two buyer campaigns: `Perth family home 2026` (house, 7 fixtures, 3 historical pre-U1 report runs) and `Synthetic down-south land` (land, 2 synthetic listings; assessment not yet available — U2).
+- Run backend tests with the throwaway URL exported: `export DATABASE_URL=<supervisor backend DATABASE_URL> APP_ENV=development M4_2_VERIFY_ISOLATED_DB=1 M5_1_VERIFY_ISOLATED_DB=1 REACT_APP_BACKEND_URL=<frontend .env value>`; conftest refuses non-local hosts.
+- Signup stays disabled on the preview (SIGNUP_ENABLED=false); use the seeded accounts above.

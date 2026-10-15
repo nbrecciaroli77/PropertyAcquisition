@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import AuthContext, get_auth, require_writer
+from app.core.deps import AuthContext, get_auth, require_writer, scoped_journey
 from app.core.security import now_utc
 from app.db.base import get_db
 from app.db.models import (
@@ -62,10 +62,14 @@ async def _get_scoped_proposal(
 @router.get("", response_model=DuplicateListResponse, summary="List duplicate proposals")
 async def list_proposals(
     state: str | None = None,
+    journey_id: uuid.UUID | None = None,
     auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> DuplicateListResponse:
     q = select(DuplicateProposal).where(DuplicateProposal.workspace_id == auth.workspace.id)
+    if journey_id is not None:
+        journey = await scoped_journey(journey_id, db, auth.workspace.id)
+        q = q.join(Property, Property.id == DuplicateProposal.property_id_a).where(Property.journey_id == journey.id)
     if state:
         q = q.where(DuplicateProposal.state == state)
     q = q.order_by(DuplicateProposal.created_at.desc())
@@ -141,6 +145,8 @@ async def scan_duplicates(
                 continue
             if num_a != num_b_m.group(1):
                 continue
+            if p_a.journey_id != p_b.journey_id:
+                continue  # never propose across buyer campaigns
             if p_a.normalised_address == p_b.normalised_address:
                 continue
             pair = frozenset({p_a.id, p_b.id})
@@ -156,11 +162,12 @@ async def scan_duplicates(
                 await create_notification_event(
                     db,
                     workspace_id=auth.workspace.id,
+                    journey_id=p_a.journey_id,
                     category="duplicate_review",
                     fingerprint=f"duplicate:{proposal.id}:review",
                     title="Duplicate review needed",
                     message=f"Review the possible match between {p_a.address_line} and {p_b.address_line}.",
-                    safe_deep_link="/app/duplicates",
+                    safe_deep_link=f"/app/duplicates?campaign={p_a.journey_id}",
                     property_id=proposal.property_id_a,
                     evidence_ref={"proposal_id": str(proposal.id), "street_number": num_a},
                 )

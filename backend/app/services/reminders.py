@@ -58,12 +58,12 @@ async def process_workspace_reminders(
     for task in tasks:
         assert task.due_at is not None
         target_ids = {task.assignee_user_id or task.created_by}
-        link = f"/app/tasks?task={task.id}"
+        link = f"/app/tasks?task={task.id}&campaign={task.journey_id}"
         if task.reminder_offset_minutes and task.due_at - timedelta(minutes=task.reminder_offset_minutes) <= moment < task.due_at:
             await create_notification_event(
                 db, workspace_id=workspace_id, category="reminder", fingerprint=f"task:{task.id}:reminder",
                 title=f"Reminder: {task.title}", message="Your task reminder is due.", safe_deep_link=link,
-                priority="normal", property_id=task.property_id, task_id=task.id, recipient_ids=target_ids,
+                priority="normal", property_id=task.property_id, task_id=task.id, journey_id=task.journey_id, recipient_ids=target_ids,
                 evidence_ref={"due_at": task.due_at.isoformat()}, now=moment,
             )
             created["reminder"] += 1
@@ -71,7 +71,7 @@ async def process_workspace_reminders(
             await create_notification_event(
                 db, workspace_id=workspace_id, category="task_overdue", fingerprint=f"task:{task.id}:overdue",
                 title=f"Task overdue: {task.title}", message="This task is past its due time.", safe_deep_link=link,
-                priority="high", property_id=task.property_id, task_id=task.id, recipient_ids=target_ids,
+                priority="high", property_id=task.property_id, task_id=task.id, journey_id=task.journey_id, recipient_ids=target_ids,
                 evidence_ref={"due_at": task.due_at.isoformat()}, now=moment,
             )
             created["overdue"] += 1
@@ -94,7 +94,7 @@ async def process_workspace_reminders(
             await create_notification_event(
                 db, workspace_id=workspace_id, category="task_due_soon", fingerprint=f"task:{task.id}:due-soon",
                 title=f"Task due soon: {task.title}", message="This task is approaching its due time.", safe_deep_link=link,
-                priority="high", property_id=task.property_id, task_id=task.id, recipient_ids=eligible,
+                priority="high", property_id=task.property_id, task_id=task.id, journey_id=task.journey_id, recipient_ids=eligible,
                 evidence_ref={"due_at": task.due_at.isoformat()}, now=moment,
             )
             created["due_soon"] += 1

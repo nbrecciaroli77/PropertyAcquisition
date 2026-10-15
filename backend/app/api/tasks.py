@@ -134,8 +134,8 @@ async def create_task(
     await record_audit(db, action="task_created", actor_user_id=auth.user.id, workspace_id=journey.workspace_id, subject=str(task.id))
     await create_notification_event(
         db, workspace_id=journey.workspace_id, category="task_assigned", fingerprint=f"task:{task.id}:assigned:{assignee_id}",
-        title=f"Task assigned: {task.title}", message="A task was assigned to you.", safe_deep_link=f"/app/tasks?task={task.id}",
-        priority="normal", property_id=task.property_id, task_id=task.id, recipient_ids={assignee_id}, evidence_ref={"task_id": str(task.id)},
+        title=f"Task assigned: {task.title}", message="A task was assigned to you.", safe_deep_link=f"/app/tasks?task={task.id}&campaign={task.journey_id}",
+        priority="normal", property_id=task.property_id, task_id=task.id, journey_id=task.journey_id, recipient_ids={assignee_id}, evidence_ref={"task_id": str(task.id)},
     )
     await db.commit()
     await db.refresh(task)

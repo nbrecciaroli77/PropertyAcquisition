@@ -248,11 +248,17 @@ export interface BriefPayload {
   };
 }
 
+export type CampaignKind = "house" | "land";
+
 export interface Journey {
   id: string;
   name: string;
   status: "onboarding" | "active" | "archived";
   timezone: string;
+  campaign_kind: CampaignKind;
+  campaign_enabled: boolean;
+  assessment_profile: string;
+  assessment_available: boolean;
   onboarding_step: number;
   onboarding_complete: boolean;
   row_version: number;
@@ -283,12 +289,19 @@ export interface BriefResponse {
 
 export const journeyApi = {
   list: () => apiFetch<Journey[]>("/journeys"),
-  create: (name: string, timezone: string) =>
-    apiFetch<Journey>("/journeys", { method: "POST", body: JSON.stringify({ name, timezone }) }),
+  create: (name: string, timezone: string, campaign_kind: CampaignKind = "house") =>
+    apiFetch<Journey>("/journeys", { method: "POST", body: JSON.stringify({ name, timezone, campaign_kind }) }),
   get: (id: string) => apiFetch<Journey>(`/journeys/${id}`),
   update: (
     id: string,
-    body: { expected_row_version: number; name?: string; timezone?: string; onboarding_step?: number; status?: string },
+    body: {
+      expected_row_version: number;
+      name?: string;
+      timezone?: string;
+      onboarding_step?: number;
+      status?: string;
+      campaign_enabled?: boolean;
+    },
   ) => apiFetch<Journey>(`/journeys/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   completeOnboarding: (id: string) =>
     apiFetch<Journey>(`/journeys/${id}/complete-onboarding`, { method: "POST" }),

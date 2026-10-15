@@ -2,7 +2,8 @@
 
 Design invariants:
 - workspace_id is ALWAYS derived from the authenticated session, never the request body.
-- Exact normalised_address match → duplicate, regardless of journey.
+- Exact normalised_address match inside the same buyer campaign (journey) → duplicate;
+  another campaign's records are never consulted or revealed (U1 campaign isolation).
 - Replay of the same (workspace, journey, mode, address) returns the existing result.
 - Unknown facts stay Unknown — never coerced to 0/false/None.
 - No AI, no URL fetching, no scheduled jobs activated.
@@ -37,6 +38,7 @@ from app.schemas.intake import (
     PriceIn,
 )
 from app.services import parser as text_parser
+from app.services.campaigns import assessment_profile
 from app.services.properties import evaluate_property, normalise_address
 
 _SLASH_UNIT_RE = re.compile(r"^(?:[Uu]nit\s+)?(\d+)/")
@@ -247,13 +249,36 @@ async def process_intake(
         review_reasons = list(pr.review_reasons)
 
         if pr.address_line is None or pr.suburb is None or pr.state is None:
-            # Cannot create a property without a complete address
+            # Cannot create a property without a complete address. The receipt key is
+            # campaign-scoped; the pre-U1 workspace-scoped key is honoured only for replay
+            # of a receipt already recorded against this same campaign.
+            naddr_key = hashlib.sha256(
+                f"u1:pasted_text:naddr:{journey.workspace_id}:{journey.id}:{pt.raw_text[:200]}".encode()
+            ).hexdigest()[:64]
+            legacy_key = hashlib.sha256(
+                f"m4.1:pasted_text:naddr:{journey.workspace_id}:{pt.raw_text[:200]}".encode()
+            ).hexdigest()[:64]
+            replay = (
+                await db.execute(
+                    select(IntakeEvent).where(
+                        IntakeEvent.workspace_id == journey.workspace_id,
+                        IntakeEvent.journey_id == journey.id,
+                        IntakeEvent.idempotency_key.in_((naddr_key, legacy_key)),
+                    )
+                )
+            ).scalars().first()
+            if replay is not None:
+                return IntakeResult(
+                    intake_id=replay.id,
+                    state=replay.state,  # type: ignore[arg-type]
+                    review_reasons=replay.review_reasons or [],
+                    parsed_facts=parsed_facts_out,
+                    journey_id=journey.id,
+                )
             intake_ev = IntakeEvent(
                 workspace_id=journey.workspace_id,
                 journey_id=journey.id,
-                idempotency_key=hashlib.sha256(
-                    f"m4.1:pasted_text:naddr:{journey.workspace_id}:{pt.raw_text[:200]}".encode()
-                ).hexdigest()[:64],
+                idempotency_key=naddr_key,
                 source_label="Manual entry (pasted text)",
                 channel="manual",
                 state="requires_review",
@@ -294,6 +319,7 @@ async def process_intake(
         await db.execute(
             select(IntakeEvent).where(
                 IntakeEvent.workspace_id == journey.workspace_id,
+                IntakeEvent.journey_id == journey.id,
                 IntakeEvent.idempotency_key == idem_key,
             )
         )
@@ -323,11 +349,12 @@ async def process_intake(
             journey_id=journey.id,
         )
 
-    # ── Duplicate check (workspace-wide) ────────────────────────────────────
+    # ── Duplicate check (within this buyer campaign only) ────────────────────
     existing_prop = (
         await db.execute(
             select(Property).where(
                 Property.workspace_id == journey.workspace_id,
+                Property.journey_id == journey.id,
                 Property.normalised_address == normalised_addr,
             )
         )
@@ -472,11 +499,12 @@ async def process_intake(
     await create_notification_event(
         db,
         workspace_id=journey.workspace_id,
+        journey_id=journey.id,
         category="new_property",
         fingerprint=f"property:{prop.id}:created",
         title=f"New property: {address_line}",
         message=f"{address_line}, {suburb} was added to your property workspace.",
-        safe_deep_link=f"/app/properties/{prop.id}",
+        safe_deep_link=f"/app/properties/{prop.id}?campaign={journey.id}",
         property_id=prop.id,
         source_event_id=intake_ev.id,
         evidence_ref={"intake_mechanism": intake_mechanism_override or request.mode},
@@ -490,7 +518,7 @@ async def process_intake(
         )
     ).scalar_one_or_none() if journey.current_version_id else None
 
-    if brief is not None:
+    if brief is not None and (await assessment_profile(db, journey))[1]:
         await evaluate_property(db, prop, brief)
 
     return IntakeResult(

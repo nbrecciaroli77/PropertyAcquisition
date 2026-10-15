@@ -6,6 +6,7 @@ import { Wordmark } from "../../components/Brand";
 import { Button } from "../../components/Button";
 import { useAuth } from "../../lib/auth";
 import { notificationApi } from "../../lib/notifications";
+import { CampaignSwitcher } from "./CampaignSwitcher";
 
 const initialsOf = (name: string): string =>
   name
@@ -29,9 +30,10 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-canvas md:bg-canvas/95 md:backdrop-blur-[2px]" data-testid="top-bar">
       <div className="flex h-14 items-center gap-3 px-4 md:h-16 md:px-6 lg:px-8">
-        <span className="md:hidden">
+        <span className="shrink-0 md:hidden">
           <Wordmark to="/app/today" compact />
         </span>
+        <CampaignSwitcher />
 
         <form
           role="search"

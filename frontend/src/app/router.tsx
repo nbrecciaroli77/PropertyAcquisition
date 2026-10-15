@@ -31,6 +31,7 @@ import DuplicatesPage from "../features/duplicates/DuplicatesPage";
 import NotificationCenterPage from "../features/notifications/NotificationCenterPage";
 import ReportsPage from "../features/reports/ReportsPage";
 import PrivacyDataPage from "../features/settings/PrivacyDataPage";
+import CampaignSettingsPage from "../features/campaign/CampaignSettingsPage";
 
 /** Sends a signed-in owner to setup when no journey exists yet. */
 function AppLanding() {
@@ -80,6 +81,7 @@ export const routes = [
       { path: "sources", element: <SourcesPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "settings/privacy", element: <PrivacyDataPage /> },
+      { path: "campaign", element: <CampaignSettingsPage /> },
       { path: "reports", element: <ReportsPage /> },
       { path: "more", element: <MorePage /> },
       { path: "properties/add", element: <AddPropertyPage /> },

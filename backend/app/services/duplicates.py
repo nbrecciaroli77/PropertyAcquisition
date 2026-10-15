@@ -3,6 +3,8 @@
 Rules:
 - Never auto-merge records.
 - Proposals are workspace-scoped; cross-tenant access returns 404.
+- Both properties must belong to the same buyer campaign (journey); cross-campaign pairs are
+  never proposed and can never be merged (U1 campaign isolation).
 - Confirm = soft merge (FK reassignment) + snapshot for undo.
 - Undo restores ONLY originally moved records (not later activity).
 - Prevent merge cycles and merging already-merged records without review.
@@ -78,8 +80,10 @@ async def create_proposal(
     """Create a proposal if one doesn't already exist for this pair (in either direction)."""
     prop_a = (await db.execute(select(Property).where(Property.id == property_id_a))).scalar_one_or_none()
     prop_b = (await db.execute(select(Property).where(Property.id == property_id_b))).scalar_one_or_none()
-    if prop_a is None or prop_b is None:
+    if prop_a is None or prop_b is None or prop_a.workspace_id != workspace_id or prop_b.workspace_id != workspace_id:
         raise ValueError("Property not found")
+    if prop_a.journey_id != prop_b.journey_id:
+        raise ValueError("Properties belong to different campaigns and cannot be proposed as duplicates")
 
     # Check for existing proposal in either direction
     existing = (
@@ -187,6 +191,8 @@ async def confirm_merge(
 
     if survivor is None or dup is None:
         raise ValueError("Property not found")
+    if survivor.journey_id != dup.journey_id:
+        raise ValueError("Cross-campaign merge is not allowed: these properties belong to different campaigns")
     if dup.merged_into_id is not None:
         raise ValueError("Property is already merged into another. Undo that merge first.")
 

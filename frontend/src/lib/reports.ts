@@ -10,6 +10,7 @@ export interface ReportRun {
   kind: ReleaseKind;
   release_state: string;
   idempotency_key: string;
+  idempotency_scope: "workspace_legacy" | "campaign";
   period_start: string | null;
   period_end: string | null;
   cutoff_at: string | null;

@@ -2,7 +2,7 @@ import { apiFetch } from "./api";
 
 export type NotificationChannel = "off" | "in_app" | "email" | "both";
 export interface NotificationItem {
-  id: string; event_id: string; category: string; title: string; message: string; priority: string;
+  id: string; event_id: string; journey_id: string | null; category: string; title: string; message: string; priority: string;
   safe_deep_link: string; property_id: string | null; property_address: string | null; property_image_url: string | null;
   task_id: string | null; source_event_id: string | null; report_run_id: string | null; evidence_ref: Record<string, unknown>;
   created_at: string; read_at: string | null; dismissed_at: string | null; expires_at: string | null; is_expired: boolean;

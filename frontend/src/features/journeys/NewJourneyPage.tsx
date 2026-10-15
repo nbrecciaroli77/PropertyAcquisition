@@ -12,6 +12,7 @@ import {
   type Area,
   type BriefPayload,
   type BriefResponse,
+  type CampaignKind,
   type PropertyType,
   type StateTerritory,
 } from "../../lib/api";
@@ -45,6 +46,7 @@ export default function NewJourneyPage() {
   const [draft, setDraft] = useState<BriefPayload | null>(null);
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("Australia/Perth");
+  const [kind, setKind] = useState<CampaignKind>("house");
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +87,7 @@ export default function NewJourneyPage() {
       let id = journeyId;
       let version = rowVersion;
       if (id === null) {
-        const journey = await journeyApi.create(name.trim() || "My buying journey", timezone);
+        const journey = await journeyApi.create(name.trim() || "My buying journey", timezone, kind);
         id = journey.id;
         version = journey.row_version;
         setJourneyId(id);
@@ -222,6 +224,19 @@ export default function NewJourneyPage() {
                 placeholder="Perth family home 2026"
                 helper="Only you and your household see this."
               />
+              {journeyId === null && (
+                <SelectField
+                  id="journey-campaign-kind"
+                  label="Campaign type"
+                  value={kind}
+                  onChange={setKind}
+                  options={[
+                    { value: "house", label: "House — assessed with house rules" },
+                    { value: "land", label: "Land — assessment arrives in U2" },
+                  ]}
+                  helper="Each campaign keeps its own properties, reports and settings. Land properties are recorded but not assessed until U2; house rules are never applied to them."
+                />
+              )}
               <SelectField
                 id="journey-state"
                 label="Main state or territory"

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.campaigns import require_accepting_intake
 from app.core.deps import AuthContext, get_auth, require_writer, scoped_journey
 from app.db.base import get_db
 from app.db.models import IntakeEvent, Property
@@ -82,6 +83,7 @@ async def submit_intake(
     """
     require_writer(auth)
     journey = await scoped_journey(journey_id, db, auth.workspace.id)
+    require_accepting_intake(journey)
 
     # Validate mode-payload alignment
     if body.mode == "structured_form" and body.structured is None:

@@ -2,7 +2,7 @@
 
 from httpx import AsyncClient
 
-from tests.conftest import register_and_verify, unique_email
+from tests.conftest import register_and_verify, track_ip, unique_email
 
 PASSWORD = "Prototype2026pass"
 
@@ -15,14 +15,14 @@ async def test_lockout_holds_when_the_client_ip_rotates(client: AsyncClient) -> 
         response = await client.post(
             "/api/auth/login",
             json={"email": email, "password": "Wrong2026pass"},
-            headers={"x-forwarded-for": f"10.208.134.{70 + index}, 172.16.0.1"},
+            headers={"x-forwarded-for": f"{track_ip(f'10.208.134.{70 + index}')}, 172.16.0.1"},
         )
         assert response.status_code == 401
 
     locked = await client.post(
         "/api/auth/login",
         json={"email": email, "password": PASSWORD},
-        headers={"x-forwarded-for": "10.208.134.99"},
+        headers={"x-forwarded-for": track_ip("10.208.134.99")},
     )
     assert locked.status_code == 429
     assert locked.headers["Retry-After"] == "900"

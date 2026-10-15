@@ -11,51 +11,53 @@ import pytest_asyncio
 
 from httpx import AsyncClient
 
+from tests.conftest import _new_client, login, register_and_verify, unique_email
+
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
+# Synthetic tracked tenants: the conftest purge removes every row they create, so this suite
+# never writes into the seeded demo accounts and can be re-run on the same database.
 
 
-def _auth_headers(client: AsyncClient, email: str, password: str = "Prototype2026pass") -> dict:
-    """Synchronous helper — call login_sync only in sync context; replaced by async fixture."""
-    raise NotImplementedError("Use async fixture _login_headers instead.")
-
-
-@pytest_asyncio.fixture
-async def owner_headers(async_client: AsyncClient) -> dict[str, str]:
-    resp = await async_client.post(
-        "/api/auth/login",
-        json={"email": "owner@propertyacquisition-demo.com", "password": "Prototype2026pass"},
-    )
-    assert resp.status_code == 200
-    return {"Cookie": "; ".join(f"{k}={v}" for k, v in resp.cookies.items())}
-
-
-@pytest_asyncio.fixture
-async def other_headers(async_client: AsyncClient) -> dict[str, str]:
-    resp = await async_client.post(
-        "/api/auth/login",
-        json={"email": "other@propertyacquisition-demo.com", "password": "Prototype2026pass"},
-    )
-    assert resp.status_code == 200
-    return {"Cookie": "; ".join(f"{k}={v}" for k, v in resp.cookies.items())}
+async def _synthetic_tenant(prefix: str) -> tuple[dict[str, str], str]:
+    email = unique_email(prefix)
+    async with _new_client() as c:
+        await register_and_verify(c, email)
+        await login(c, email)
+        journey = await c.post("/api/journeys", json={"name": "Synthetic intake journey", "timezone": "Australia/Perth"})
+        assert journey.status_code == 201, journey.text
+        cookie = "; ".join(f"{k}={v}" for k, v in c.cookies.items())
+    return {"Cookie": cookie}, journey.json()["id"]
 
 
 @pytest_asyncio.fixture
-async def owner_journey_id(async_client: AsyncClient, owner_headers: dict) -> str:
-    resp = await async_client.get("/api/journeys", headers=owner_headers)
-    assert resp.status_code == 200
-    journeys = resp.json()
-    assert journeys, "Owner must have at least one journey (run seed)"
-    return journeys[0]["id"]
+async def owner_tenant() -> tuple[dict[str, str], str]:
+    return await _synthetic_tenant("intake-owner")
 
 
 @pytest_asyncio.fixture
-async def other_journey_id(async_client: AsyncClient, other_headers: dict) -> str:
-    resp = await async_client.get("/api/journeys", headers=other_headers)
-    assert resp.status_code == 200
-    journeys = resp.json()
-    assert journeys, "Other account must have a journey (run seed)"
-    return journeys[0]["id"]
+async def other_tenant() -> tuple[dict[str, str], str]:
+    return await _synthetic_tenant("intake-other")
+
+
+@pytest_asyncio.fixture
+async def owner_headers(owner_tenant: tuple[dict[str, str], str]) -> dict[str, str]:
+    return owner_tenant[0]
+
+
+@pytest_asyncio.fixture
+async def other_headers(other_tenant: tuple[dict[str, str], str]) -> dict[str, str]:
+    return other_tenant[0]
+
+
+@pytest_asyncio.fixture
+async def owner_journey_id(owner_tenant: tuple[dict[str, str], str]) -> str:
+    return owner_tenant[1]
+
+
+@pytest_asyncio.fixture
+async def other_journey_id(other_tenant: tuple[dict[str, str], str]) -> str:
+    return other_tenant[1]
 
 
 # ── Test helpers ──────────────────────────────────────────────────────────────

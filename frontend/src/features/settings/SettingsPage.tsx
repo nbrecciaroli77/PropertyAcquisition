@@ -10,6 +10,7 @@ import { authApi, type SessionOut } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { TIMEZONE_OPTIONS } from "../../lib/briefOptions";
 import { formatDate } from "../../lib/format";
+import { CampaignsSection } from "./CampaignsSection";
 import { NotificationSettings } from "./NotificationSettings";
 
 export default function SettingsPage() {
@@ -184,6 +185,8 @@ export default function SettingsPage() {
             household roles arrive in Milestone 6; privileged access will require a separate role and an audit event.
           </p>
         </section>
+
+        <CampaignsSection />
 
         <NotificationSettings />
 

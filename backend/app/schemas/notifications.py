@@ -15,6 +15,7 @@ NotificationChannel = Literal["off", "in_app", "email", "both"]
 class NotificationOut(Strict):
     id: UUID
     event_id: UUID
+    journey_id: UUID | None
     category: str
     title: str
     message: str

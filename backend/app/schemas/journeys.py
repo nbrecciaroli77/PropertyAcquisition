@@ -14,6 +14,7 @@ class Strict(BaseModel):
 class JourneyCreate(Strict):
     name: str = Field(min_length=1, max_length=160)
     timezone: str = Field(default="Australia/Perth", max_length=64)
+    campaign_kind: Literal["house", "land"] = "house"
 
 
 class JourneyUpdate(Strict):
@@ -21,6 +22,7 @@ class JourneyUpdate(Strict):
     timezone: str | None = Field(default=None, max_length=64)
     onboarding_step: int | None = Field(default=None, ge=1, le=6)
     status: Literal["onboarding", "active", "archived"] | None = None
+    campaign_enabled: bool | None = None
     expected_row_version: int
 
 
@@ -29,6 +31,10 @@ class JourneyOut(Strict):
     name: str
     status: str
     timezone: str
+    campaign_kind: str
+    campaign_enabled: bool
+    assessment_profile: str
+    assessment_available: bool
     onboarding_step: int
     onboarding_complete: bool
     row_version: int

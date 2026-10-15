@@ -27,6 +27,7 @@ class ReportRunOut(Strict):
     kind: ReleaseKind
     release_state: str
     idempotency_key: str
+    idempotency_scope: str
     period_start: datetime | None
     period_end: datetime | None
     cutoff_at: datetime | None

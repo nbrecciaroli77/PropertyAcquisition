@@ -1,7 +1,6 @@
 """Targeted acceptance coverage for M5.2: report previews, exports and deletion.
-Runs against the live application database using disposable synthetic accounts under a
-dedicated test email domain; the demo owner/other accounts and their workspaces are never
-mutated destructively. All test users/workspaces are torn down at the end of the session."""
+Runs against a disposable database using synthetic accounts. Every created user is tracked by
+exact email/ID and removed (with its owned workspace) after each test, including failed tests."""
 from __future__ import annotations
 
 import io
@@ -10,21 +9,15 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 
 from app.core.security import hash_password
 from app.db.base import get_sessionmaker
 from app.db.models import (
-    AuditEvent,
     AuthSession,
-    AuthToken,
-    BriefVersion,
     DataExport,
     DeletionRequest,
-    Journey,
-    LoginAttempt,
     Membership,
     NotificationEvent,
     OutboxMessage,
@@ -35,40 +28,17 @@ from app.db.models import (
     Workspace,
 )
 from app.services.deletion import process_due_deletions
+from tests.conftest import track_email, track_user_id
 
 pytestmark = pytest.mark.asyncio
 
 TEST_DOMAIN = "m52tests.pa-prototype.com"
 PASSWORD = "Prototype2026pass"
-_created_user_ids: list[uuid.UUID] = []
-_created_workspace_ids: list[uuid.UUID] = []
-
-
-@pytest_asyncio.fixture(autouse=True, scope="session")
-async def _module_cleanup():
-    yield
-    async with get_sessionmaker()() as db:
-        ids = _created_user_ids
-        ws_ids = _created_workspace_ids
-        if ws_ids:
-            await db.execute(delete(BriefVersion).where(BriefVersion.workspace_id.in_(ws_ids)))
-            await db.execute(delete(Journey).where(Journey.workspace_id.in_(ws_ids)))
-        if ids:
-            await db.execute(delete(AuditEvent).where(AuditEvent.actor_user_id.in_(ids)))
-            await db.execute(delete(AuthSession).where(AuthSession.user_id.in_(ids)))
-            await db.execute(delete(AuthToken).where(AuthToken.user_id.in_(ids)))
-            await db.execute(delete(Membership).where(Membership.user_id.in_(ids)))
-        if ws_ids:
-            await db.execute(delete(Workspace).where(Workspace.id.in_(ws_ids)))
-        await db.execute(delete(OutboxMessage).where(OutboxMessage.to_email.like(f"%@{TEST_DOMAIN}")))
-        await db.execute(delete(LoginAttempt).where(LoginAttempt.identifier.like(f"%{TEST_DOMAIN}%")))
-        if ids:
-            await db.execute(delete(User).where(User.id.in_(ids)))
-        await db.commit()
+# Cleanup is handled by the shared exact-identity registry in conftest (per test, after failures too).
 
 
 async def _register(client: AsyncClient, prefix: str) -> tuple[str, uuid.UUID, uuid.UUID]:
-    email = f"{prefix}-{uuid.uuid4().hex[:8]}@{TEST_DOMAIN}"
+    email = track_email(f"{prefix}-{uuid.uuid4().hex[:8]}@{TEST_DOMAIN}")
     r = await client.post("/api/auth/signup", json={"email": email, "password": PASSWORD, "display_name": prefix})
     assert r.status_code == 201, r.text
     outbox = (await client.get("/api/dev/outbox", params={"email": email})).json()
@@ -77,8 +47,7 @@ async def _register(client: AsyncClient, prefix: str) -> tuple[str, uuid.UUID, u
     await _login(client, email)
     me = (await client.get("/api/auth/me")).json()
     user_id, workspace_id = uuid.UUID(me["user"]["id"]), uuid.UUID(me["workspace"]["id"])
-    _created_user_ids.append(user_id)
-    _created_workspace_ids.append(workspace_id)
+    track_user_id(user_id)
     return email, user_id, workspace_id
 
 
@@ -186,14 +155,14 @@ async def test_export_personal_contents_excludes_secrets(async_client: AsyncClie
 
 async def test_export_workspace_requires_owner_and_isolated(async_client: AsyncClient) -> None:
     owner_email, owner_id, workspace_id = await _register(async_client, "wsowner")
-    editor_email = f"wseditor-{uuid.uuid4().hex[:8]}@{TEST_DOMAIN}"
+    editor_email = track_email(f"wseditor-{uuid.uuid4().hex[:8]}@{TEST_DOMAIN}")
     async with get_sessionmaker()() as db:
         editor = User(email=editor_email, password_hash=hash_password(PASSWORD), display_name="editor", email_verified_at=datetime.now(timezone.utc))
         db.add(editor)
         await db.flush()
         db.add(Membership(workspace_id=workspace_id, user_id=editor.id, role="editor"))
         await db.commit()
-        _created_user_ids.append(editor.id)
+        track_user_id(editor.id)
     await _login(async_client, editor_email)
     forbidden = await async_client.post("/api/exports/workspace")
     assert forbidden.status_code == 403

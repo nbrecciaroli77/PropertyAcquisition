@@ -113,6 +113,7 @@ async def create_notification_event(
     category: str,
     fingerprint: str,
     title: str,
+    journey_id: uuid.UUID | None = None,
     message: str,
     safe_deep_link: str,
     priority: str = "normal",
@@ -144,6 +145,7 @@ async def create_notification_event(
             async with db.begin_nested():
                 event = NotificationEvent(
                     workspace_id=workspace_id,
+                    journey_id=journey_id,
                     category=category,
                     event_fingerprint=fingerprint,
                     title=title,

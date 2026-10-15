@@ -158,12 +158,17 @@ class LoginAttempt(Base):
     )
 
 
+CAMPAIGN_KINDS = ("house", "land")
+
+
 class Journey(Base, TimestampMixin):
-    """A buying journey. Holds the resumable onboarding state and the working brief draft."""
+    """A buying journey — the buyer-campaign boundary (distinct from a portal ListingCampaign).
+    Holds the resumable onboarding state and the working brief draft."""
 
     __tablename__ = "journeys"
     __table_args__ = (
         CheckConstraint("status in ('onboarding','active','archived')", name="ck_journey_status"),
+        CheckConstraint(f"campaign_kind in {CAMPAIGN_KINDS!r}", name="ck_journey_campaign_kind"),
         Index("ix_journeys_workspace", "workspace_id"),
     )
 
@@ -174,6 +179,8 @@ class Journey(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="onboarding")
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Australia/Perth")
+    campaign_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="house", server_default="house")
+    campaign_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
     onboarding_step: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     draft_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -252,11 +259,14 @@ SOURCE_KINDS = ("original_source", "partial", "manual", "conflict")
 
 
 class Property(Base, TimestampMixin):
-    """Physical address identity. Unit suffixes are part of identity: 81A and 81C never merge."""
+    """Physical address identity within one buyer campaign. Unit suffixes are part of identity:
+    81A and 81C never merge. The same address may exist independently in another campaign."""
 
     __tablename__ = "properties"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "normalised_address", name="uq_property_workspace_address"),
+        UniqueConstraint(
+            "workspace_id", "journey_id", "normalised_address", name="uq_property_workspace_journey_address"
+        ),
         Index("ix_properties_workspace_journey", "workspace_id", "journey_id"),
     )
 
@@ -974,21 +984,29 @@ class EnrichmentRecord(Base, TimestampMixin):
 
 
 REPORT_TYPES = ("daily", "weekly", "monthly")
+REPORT_IDEMPOTENCY_SCOPES = ("workspace_legacy", "campaign")
 
 
 class ReportRun(Base, TimestampMixin):
     """Report-run/release metadata.  Distinguishes preview, on-demand and future
-    production releases.  idempotency_key is unique per workspace.  No email
-    delivery is performed."""
+    production releases.  idempotency_key is unique per (workspace, buyer campaign);
+    pre-U1 rows keep their original workspace-scoped key (idempotency_scope='workspace_legacy')
+    and are reachable for idempotent replay only through ReportRunLegacyMapping.
+    No email delivery is performed."""
 
     __tablename__ = "report_runs"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "idempotency_key", name="uq_report_run_workspace_key"),
+        UniqueConstraint(
+            "workspace_id", "journey_id", "idempotency_key", name="uq_report_run_workspace_journey_key"
+        ),
         CheckConstraint(f"kind in {REPORT_RUN_KINDS!r}", name="ck_report_run_kind"),
         CheckConstraint(
             f"release_state in {REPORT_RELEASE_STATES!r}", name="ck_report_run_release_state"
         ),
         CheckConstraint(f"report_type in {REPORT_TYPES!r}", name="ck_report_run_report_type"),
+        CheckConstraint(
+            f"idempotency_scope in {REPORT_IDEMPOTENCY_SCOPES!r}", name="ck_report_run_idempotency_scope"
+        ),
         Index("ix_report_runs_workspace_journey", "workspace_id", "journey_id"),
     )
 
@@ -1003,6 +1021,9 @@ class ReportRun(Base, TimestampMixin):
         ForeignKey("brief_versions.id", ondelete="SET NULL")
     )
     idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    idempotency_scope: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="campaign", server_default="workspace_legacy"
+    )
     kind: Mapped[str] = mapped_column(String(16), nullable=False, default="preview")
     report_type: Mapped[str] = mapped_column(String(16), nullable=False, default="daily")
     release_state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
@@ -1022,6 +1043,67 @@ class ReportRun(Base, TimestampMixin):
     ready_to_send_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ready_to_send_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class ReportRunLegacyMapping(Base):
+    """Explicit, migration-time ownership record for a pre-U1 report run. Written once from the
+    run's own recorded journey_id (same workspace); never re-pointed at another campaign."""
+
+    __tablename__ = "report_run_legacy_mappings"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "journey_id", "legacy_idempotency_key", name="uq_report_legacy_mapping_scope_key"
+        ),
+    )
+
+    report_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("report_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    journey_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("journeys.id", ondelete="CASCADE"), nullable=False)
+    legacy_idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    mapping_basis: Mapped[str] = mapped_column(String(60), nullable=False)
+    migration_revision: Mapped[str] = mapped_column(String(32), nullable=False)
+    mapped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+CAMPAIGN_CONFIG_SCOPES = ("user_default", "campaign")
+
+
+class CampaignConfigVersion(Base):
+    """Immutable, versioned configuration layer. scope='user_default' holds one user's defaults in a
+    workspace; scope='campaign' holds one buyer campaign's overrides. Values equal to "INHERIT"
+    defer to the next layer. The highest version_no per scope owner is current."""
+
+    __tablename__ = "campaign_config_versions"
+    __table_args__ = (
+        CheckConstraint(f"scope in {CAMPAIGN_CONFIG_SCOPES!r}", name="ck_campaign_config_scope"),
+        CheckConstraint(
+            "(scope = 'user_default' AND user_id IS NOT NULL AND journey_id IS NULL) OR "
+            "(scope = 'campaign' AND journey_id IS NOT NULL AND user_id IS NULL)",
+            name="ck_campaign_config_owner",
+        ),
+        CheckConstraint("version_no >= 1", name="ck_campaign_config_version_no"),
+        Index(
+            "uq_campaign_config_user_version", "workspace_id", "user_id", "version_no",
+            unique=True, postgresql_where=text("scope = 'user_default'"),
+        ),
+        Index(
+            "uq_campaign_config_campaign_version", "journey_id", "version_no",
+            unique=True, postgresql_where=text("scope = 'campaign'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    journey_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("journeys.id", ondelete="CASCADE"))
+    version_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    settings: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    reason: Mapped[str] = mapped_column(String(400), nullable=False)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 # ── M5.1 Notifications, tasks and reminders ──────────────────────────────────
@@ -1063,6 +1145,7 @@ class NotificationEvent(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    journey_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("journeys.id", ondelete="SET NULL"))
     category: Mapped[str] = mapped_column(String(40), nullable=False)
     event_fingerprint: Mapped[str] = mapped_column(String(200), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)

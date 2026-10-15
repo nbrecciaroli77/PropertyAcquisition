@@ -24,6 +24,8 @@ from app.schemas.journeys import (
     JourneyUpdate,
     PublishRequest,
 )
+from app.services.campaigns import assessment_profile
+from app.services.outbox import record_audit
 from app.services.properties import reevaluate_journey
 
 router = APIRouter(prefix="/journeys", tags=["journeys"])
@@ -49,11 +51,16 @@ async def _current_version(db: AsyncSession, journey: Journey) -> BriefVersion |
 
 async def _journey_out(db: AsyncSession, journey: Journey) -> JourneyOut:
     current = await _current_version(db, journey)
+    profile_id, available = await assessment_profile(db, journey)
     return JourneyOut(
         id=journey.id,
         name=journey.name,
         status=journey.status,
         timezone=journey.timezone,
+        campaign_kind=journey.campaign_kind,
+        campaign_enabled=journey.campaign_enabled,
+        assessment_profile=profile_id,
+        assessment_available=available,
         onboarding_step=journey.onboarding_step,
         onboarding_complete=journey.onboarding_completed_at is not None,
         row_version=journey.row_version,
@@ -106,6 +113,7 @@ async def create_journey(
         workspace_id=auth.workspace.id,
         name=body.name.strip(),
         timezone=body.timezone,
+        campaign_kind=body.campaign_kind,
         draft_payload=default_brief().model_dump(),
         created_by=auth.user.id,
     )
@@ -140,6 +148,12 @@ async def update_journey(
         journey.onboarding_step = body.onboarding_step
     if body.status is not None:
         journey.status = body.status
+    if body.campaign_enabled is not None and body.campaign_enabled != journey.campaign_enabled:
+        journey.campaign_enabled = body.campaign_enabled
+        await record_audit(
+            db, action="campaign.enabled" if body.campaign_enabled else "campaign.disabled",
+            actor_user_id=auth.user.id, workspace_id=journey.workspace_id, subject=str(journey.id),
+        )
     journey.row_version += 1
     await db.commit()
     await db.refresh(journey)

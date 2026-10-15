@@ -10,6 +10,7 @@ import {
 } from "react";
 import { journeyApi, type Journey } from "./api";
 import { useAuth } from "./auth";
+import { writeCompare } from "./properties";
 
 interface JourneyValue {
   journeys: Journey[];
@@ -63,6 +64,8 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
       error,
       reload,
       setActiveId: (id: string) => {
+        // Campaign-specific selections never carry over into another campaign.
+        if (active && active.id !== id) writeCompare([]);
         localStorage.setItem("pa.journey", id);
         setActiveId(id);
       },
