@@ -78,7 +78,7 @@ Actual credits consumed: **unavailable** — no credit/usage metering API is exp
 query programmatically. Starting balance reported by the owner for the U0 audit: 462.12 (carried over from
 the prior report; not re-verified here as no such verification method exists in this session).
 
-## 6. Can U1 safely begin?
+## 6. Can U1 safely begin? (first pass — superseded by §7)
 
 **No.** U1 depends on being able to run additive migrations and disposable-fixture regression tests against a
 reachable database. The database is confirmed still unreachable via the existing, unmodified configuration.
@@ -89,4 +89,68 @@ exact session-pooler connection string from **Settings → Database → Connecti
 `backend/.env` `DATABASE_URL` accordingly. Once that is done, request another U0 recovery verification pass
 before U1 begins.
 
-Stop. Awaiting the next instruction.
+## 7. Second recovery pass (after owner confirmed Supabase ACTIVE_HEALTHY)
+
+Owner reported independent read-only confirmation: project `ACTIVE_HEALTHY`, application tables present,
+`public.alembic_version = c8d5e2f9a4b1`. This pass reused the **same, unmodified** `DATABASE_URL`
+(host `aws-0-ap-southeast-2.pooler.supabase.com`, port `5432`, database `postgres`, user `postgres.***`).
+No credentials were reset, no database recreated, no migrations applied, U1 not started.
+
+### 7.1 Connectivity and migration state
+
+| Check | Result |
+|---|---|
+| Pooler connection (existing config) | **Succeeds** |
+| `GET /api/health` (live) | `200 {"status":"ok","database":"connected"}` |
+| `GET /api/readiness` (live) | `200 {"status":"ready"}` |
+| `alembic heads` (repository) | `c8d5e2f9a4b1 (head)` — single head |
+| `alembic current` (live DB) | `c8d5e2f9a4b1 (head)` |
+| Comparison | **Match** — database is at repository head; no pending migrations. Nothing applied. |
+
+### 7.2 Focused baseline checks (disposable resources)
+
+Run in-process (ASGI transport) with `pytest`, using synthetic accounts under dedicated test-only email
+domains. Test-process-only overrides enable signup/dev outbox inside the pytest process; the live deployment's
+flags were not changed. Migration/rollback tests (`test_m4_2_migration_rollback.py`) were deliberately excluded.
+
+| Area | Tests | Result |
+|---|---|---|
+| Authentication (`tests/test_auth.py`) | signup pending-verification, verify→login, weak password, single-use token, logout-all, password reset revokes sessions, no account disclosure, brute-force lockout, unauthenticated rejection | 10/10 passed |
+| Tenant isolation (`tests/test_tenancy.py`) | cross-workspace journey invisibility, cross-tenant writes refused, client workspace_id ignored, anonymous deep links rejected | 4/4 passed |
+| Report generation (`tests/test_m5_2_privacy.py`, 3 selected) | deterministic/idempotent generation + notification dedup, report cross-tenant isolation, weekly/monthly Perth period boundaries | 3/3 passed |
+| **Total** | | **17 passed, 0 failed** (291.8 s; slow due to remote pooler latency) |
+
+Live boundary probes (production flags): `POST /api/auth/signup` → `403 signup_disabled`; bad login →
+`401`; `GET /api/dev/outbox` → `404`; anonymous `GET /api/journeys` → `401`; `/api/meta` shows
+`signup_enabled:false` and all integrations off/locked.
+
+### 7.3 Data integrity / cleanup
+
+- Pre-run baseline: 5 non-test users, 5 workspaces, 0 test-domain users.
+- Post-run: the M5.2 test module's own teardown left **4 disposable `m52tests` accounts + their 4 workspaces**
+  (its cleanup does not cover report/notification rows). These were removed by ID in one guarded transaction
+  (asserted exactly 4 users created in the last 3 hours in the test domain, and no foreign memberships in their
+  workspaces); workspace deletion cascaded their report runs/notifications. One probe login-attempt row was
+  also removed.
+- Final state: 5 non-test users, 5 workspaces, 0 test-domain users — **identical to baseline**. Owner and demo
+  data were not read beyond counts and were not modified.
+
+### 7.4 Checks not run / known items
+
+- Full regression suite not run (bounded scope). `test_no_forbidden_pathways_exist` (pre-existing failure noted
+  in U0) not re-run.
+- Migration rollback tests not run (would downgrade a live schema).
+- Known gap carried from U0, unchanged: **R1** — `services/reports.py::generate_report` idempotency key omits
+  `journey_id` (cross-journey collision risk). This is U1 scope and was not touched.
+- Test hygiene note for U1: `test_m5_2_privacy.py` teardown should be made to fully clean its own fixtures.
+
+### 7.5 Can U1 safely begin?
+
+**Yes, from a baseline-readiness standpoint.** Database reachable via existing configuration, live schema at
+repository head `c8d5e2f9a4b1`, health/readiness green, and authentication, tenant-isolation and report-generation
+baselines pass against disposable resources with data restored to baseline. U1 should begin with the R1
+`journey_id` idempotency fix as an additive change.
+
+Credits consumed: **unavailable** (no metering API exposed).
+
+Stop. Awaiting the U1 instruction.

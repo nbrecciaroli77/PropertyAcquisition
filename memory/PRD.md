@@ -372,3 +372,11 @@ dashboard (Settings → Database → Connection pooling) — an owner action, no
 No retries beyond one confirming pass were made; nothing was recreated or reconfigured. **U1 cannot safely
 begin yet.** The prior `U0-report.md` was reviewed and two items were redacted before being committed
 publicly: the Supabase project ref (replaced with `<project-ref>`) and the owner's real email address.
+
+### U0 recovery verification — second pass (after Supabase ACTIVE_HEALTHY)
+
+Existing `DATABASE_URL` now connects. `/api/health` 200 connected, `/api/readiness` 200 ready. Repository
+Alembic head and live `alembic current` both `c8d5e2f9a4b1` (match; nothing applied). Focused disposable
+checks: auth 10/10, tenancy 4/4, report generation 3/3 (17 passed). M5.2 test teardown left 4 disposable
+`m52tests` accounts; removed by guarded ID-scoped transaction; counts restored to baseline (5 users, 5
+workspaces). **U1 may begin** (start with R1 `journey_id` idempotency fix). U1 not started.
