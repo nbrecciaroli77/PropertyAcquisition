@@ -380,3 +380,21 @@ Alembic head and live `alembic current` both `c8d5e2f9a4b1` (match; nothing appl
 checks: auth 10/10, tenancy 4/4, report generation 3/3 (17 passed). M5.2 test teardown left 4 disposable
 `m52tests` accounts; removed by guarded ID-scoped transaction; counts restored to baseline (5 users, 5
 workspaces). **U1 may begin** (start with R1 `journey_id` idempotency fix). U1 not started.
+
+
+## IDEA-010 uplift v2.0 — U1 campaign configuration and isolation (15 October 2026)
+
+Implemented and tested on the throwaway DB only (`127.0.0.1:5433/pa_u1_disposable`). Full report:
+`/app/docs/uplift/U1-report.md`. Screenshots are in `/app/docs/uplift/U1-screenshots/`. Testing agent: `test_reports/iteration_11.json`.
+- Versioned user defaults + campaign overrides (assessment profile, activation, timezone, intake connection ref,
+  recipient, delivery mode, cadence). Effective value resolves as override → creator default → system default.
+- R1 fixed: report idempotency key and lookup are campaign-scoped. Legacy run IDs preserved via `report_run_legacy_mappings`.
+- Campaign isolation for receipts, cutoff, notifications, report history, export and duplicate review. Cross-tenant requests return 404.
+- UI: campaign switcher in the top bar and the `/app/campaign` effective-settings page. Land shows as "planned for U2".
+- Cleanup defects in `test_m5_2_privacy.py` and `test_intake.py` fixed.
+- Migration `d4e1f7a2b9c3` (revises `c8d5e2f9a4b1`): upgrade → downgrade → re-upgrade proven on the throwaway DB only.
+- **Not deployed to live.** Live Supabase is untouched at `c8d5e2f9a4b1`. The proposed live step (report §10) is awaiting owner approval and backup confirmation.
+
+### Status after fork (15 October 2026)
+Owner chose to **stay paused** for review and to keep the preview backend on the throwaway DB. No code changes.
+Next: owner reviews U1 → Save to GitHub (commit SHA) → decides on the §10 live step → then U2 (land assessment).
