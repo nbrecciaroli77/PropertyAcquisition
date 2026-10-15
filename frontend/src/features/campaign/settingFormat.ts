@@ -41,7 +41,7 @@ const profileLabel = (id: unknown, profiles: AssessmentProfile[]): string => {
 export function effectiveText(key: SettingKey, s: EffectiveSetting, profiles: AssessmentProfile[], timeZone: string): string {
   switch (key) {
     case "assessment_profile":
-      return s.state === "available" ? profileLabel(s.effective, profiles) : `${profileLabel(s.requested, profiles)} — Not yet available — planned for U2`;
+      return s.state === "available" ? profileLabel(s.effective, profiles) : `${profileLabel(s.requested, profiles)} — Unavailable: required configuration missing or invalid`;
     case "activation_at":
       return s.effective ? `${formatDateTime(String(s.effective), timeZone)} · ${s.state === "active" ? "active" : "pending"}` : "Not activated";
     case "timezone":

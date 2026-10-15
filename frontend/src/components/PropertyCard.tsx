@@ -14,6 +14,7 @@ import {
   verdictText,
   type PropertySummary,
 } from "../lib/properties";
+import { evaluationChip } from "../lib/land";
 import { EvidenceState } from "./EvidenceState";
 import { FitRing } from "./FitRing";
 import { SourceFreshness } from "./SourceFreshness";
@@ -87,7 +88,7 @@ export function PropertyCard({
         <PropertyImage property={p} className={compact ? "h-28" : "h-40"} />
         <div className="absolute left-3 top-3 flex gap-1.5">
           <StatusChip tone={verdict === "pass" ? "pass" : verdict === "fail" ? "fail" : "unknown"} data-testid={`property-card-gate-${p.id}`}>
-            {p.evaluation ? verdictText(verdict) : "Not evaluated"}
+            {evaluationChip(p.evaluation, verdictText)}
           </StatusChip>
         </div>
         <span
@@ -137,10 +138,16 @@ export function PropertyCard({
 
         {!compact && (
           <>
-            <div className="grid grid-cols-2 gap-2 border-t border-border pt-3">
-              <FitRing value={fitTri(p)} label="Assessed fit" size={44} data-testid={`property-card-fit-${p.id}`} />
-              <FitRing value={coverageTri(p)} label="Evidence coverage" size={44} data-testid={`property-card-coverage-${p.id}`} />
-            </div>
+            {p.evaluation?.land ? (
+              <p className="border-t border-border pt-3 text-xs text-muted" data-testid={`property-card-land-gaps-${p.id}`}>
+                {p.evaluation.land.gaps.length} named verification gap{p.evaluation.land.gaps.length === 1 ? "" : "s"} · no score out of 100
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 border-t border-border pt-3">
+                <FitRing value={fitTri(p)} label="Assessed fit" size={44} data-testid={`property-card-fit-${p.id}`} />
+                <FitRing value={coverageTri(p)} label="Evidence coverage" size={44} data-testid={`property-card-coverage-${p.id}`} />
+              </div>
+            )}
             <EvidenceState outcome={p.evaluation ? gateLabel(verdict) : "Unknown"} reason={gateReason(p)} />
             {p.campaign && <SourceFreshness source={p.campaign.source_label} checkedAt={p.campaign.last_checked_at} />}
           </>

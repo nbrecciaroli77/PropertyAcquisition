@@ -18,8 +18,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import now_utc
-from app.db.models import CampaignConfigVersion, ConnectorInstance, Journey, Membership, ScheduledJob, User
+from app.db.models import (
+    BriefVersion, CampaignConfigVersion, ConnectorInstance, Journey, Membership, ScheduledJob, User,
+)
+from app.schemas.brief import BriefPayload, validate_land_config
 from app.schemas.campaigns import CampaignSettings
+from app.services.land import LAND_ENGINE_VERSION
 from app.services.matching import EVALUATION_VERSION
 
 INHERIT = "INHERIT"
@@ -38,9 +42,9 @@ ASSESSMENT_PROFILES: dict[str, dict[str, Any]] = {
     "LAND_FEASIBILITY_V1": {
         "label": "Land feasibility v1",
         "campaign_kinds": ("land",),
-        "available": False,
-        "engine_version": None,
-        "note": "Declared for land campaigns. Assessment is implemented in U2; until then matching is skipped and house rules are never borrowed.",
+        "available": True,
+        "engine_version": LAND_ENGINE_VERSION,
+        "note": "Ordinal research priorities with explained gaps; no score out of 100. House rules are never borrowed.",
     },
 }
 KIND_DEFAULT_PROFILE = {"house": "HOUSE_V1", "land": "LAND_FEASIBILITY_V1"}
@@ -209,10 +213,20 @@ async def resolve(db: AsyncSession, journey: Journey, *, now: datetime | None = 
 
     profile_id = settings["assessment_profile"]["requested"]
     profile = ASSESSMENT_PROFILES[profile_id]
+    config_errors = await profile_config_errors(db, journey, profile_id)
+    usable = profile["available"] and not config_errors
     settings["assessment_profile"].update(
-        effective=profile_id if profile["available"] else None,
-        state="available" if profile["available"] else "unavailable",
-        note=settings["assessment_profile"]["note"] or profile["note"],
+        effective=profile_id if usable else None,
+        state="available" if usable else "unavailable",
+        config_state="CONFIG_PROFILE_INVALID" if config_errors else "valid",
+        config_errors=config_errors,
+        note=settings["assessment_profile"]["note"]
+        or (
+            "Required land configuration is missing or invalid in the published brief (CONFIG_PROFILE_INVALID). "
+            "Archived defaults are never substituted."
+            if config_errors
+            else profile["note"]
+        ),
     )
     activation = settings["activation_at"]["requested"]
     activation_state = _activation_state(activation, moment)
@@ -289,6 +303,18 @@ async def resolve(db: AsyncSession, journey: Journey, *, now: datetime | None = 
         "production_scheduler_enabled": PRODUCTION_SCHEDULER_ENABLED,
         "resolved_at": moment,
     }
+
+
+async def profile_config_errors(db: AsyncSession, journey: Journey, profile_id: str) -> list[str]:
+    """Field paths missing/invalid in the published brief for profiles that need explicit configuration."""
+    if profile_id != "LAND_FEASIBILITY_V1":
+        return []
+    if journey.current_version_id is None:
+        return ["land_feasibility"]
+    version = await db.get(BriefVersion, journey.current_version_id)
+    if version is None:
+        return ["land_feasibility"]
+    return [e.field for e in validate_land_config(BriefPayload.model_validate(version.payload))]
 
 
 async def effective_timezone(db: AsyncSession, journey: Journey) -> str:

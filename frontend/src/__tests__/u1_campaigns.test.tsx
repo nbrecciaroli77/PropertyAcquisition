@@ -94,7 +94,7 @@ describe("U1 campaign selector and settings", () => {
     await waitFor(() => expect(screen.getByTestId("campaign-switcher-active-name")).toHaveTextContent(LAND.name));
     expect(localStorage.getItem("pa.journey")).toBe(LAND.id);
     expect(JSON.parse(localStorage.getItem("pa.compare") ?? "null")).toEqual([]);
-    expect(screen.getByTestId("campaign-assessment-unavailable")).toHaveTextContent("not yet available — planned for U2");
+    expect(screen.getByTestId("campaign-assessment-unavailable")).toHaveTextContent("required profile configuration is missing or invalid");
   }, 60000);
 
   it("a ?campaign= deep link opens the owning campaign", async () => {
@@ -111,7 +111,7 @@ describe("U1 campaign selector and settings", () => {
     expect(screen.getByTestId("effective-timezone-source-detail")).toHaveTextContent("From your defaults");
     expect(screen.getByTestId("effective-delivery_mode-source")).toHaveTextContent("Overridden");
     expect(screen.getByTestId("effective-activation_at-source-detail")).toHaveTextContent("System default");
-    expect(screen.getByTestId("effective-assessment_profile-value")).toHaveTextContent("Not yet available — planned for U2");
+    expect(screen.getByTestId("effective-assessment_profile-value")).toHaveTextContent("Unavailable: required configuration missing or invalid");
     expect(screen.getByTestId("schedule-worker-state")).toHaveTextContent("never activates a worker");
     expect(screen.getByTestId("schedule-daily-state")).toHaveTextContent("Waiting for activation");
     expect(screen.getByTestId("override-save")).toBeDisabled();

@@ -42,6 +42,7 @@ from app.schemas.properties import (
     WaiverCreate,
     WaiverOut,
 )
+from app.services.land import rank_key
 from app.services.campaigns import assessment_profile
 from app.services.properties import (
     ALLOWED_TRANSITIONS,
@@ -98,6 +99,7 @@ def _eval_out(ev: MatchEvaluation | None) -> EvaluationOut | None:
         gates=r["gates"],
         components=r["components"],
         computed_at=ev.computed_at,
+        land=r.get("land"),
     )
 
 
@@ -370,6 +372,15 @@ def _log(
     )
 
 
+def _priority_key(s: PropertySummary) -> tuple:
+    """Land research order (deterministic); unevaluated or house rows sort last by stable identity."""
+    land = s.evaluation.land if s.evaluation else None
+    if not land:
+        return (99, str(s.id))
+    fresh = (s.campaign.last_checked_at if s.campaign else s.updated_at).timestamp()
+    return rank_key(land, fresh, str(s.id))
+
+
 @router.get("/properties", response_model=list[PropertySummary])
 async def list_properties(
     journey_id: uuid.UUID,
@@ -377,7 +388,7 @@ async def list_properties(
     verdict: str | None = None,
     q: str | None = None,
     saved: bool | None = None,
-    sort: str = Query("checked", pattern="^(checked|address|fit)$"),
+    sort: str = Query("checked", pattern="^(checked|address|fit|priority)$"),
     auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> list[PropertySummary]:
@@ -405,7 +416,9 @@ async def list_properties(
             in f"{s.address_line} {s.suburb} {s.legacy_ref or ''} "
             f"{s.campaign.raw_price if s.campaign else ''}".lower()
         ]
-    if sort == "address":
+    if sort == "priority":
+        out.sort(key=_priority_key)
+    elif sort == "address":
         out.sort(key=lambda s: (s.suburb, s.address_line))
     elif sort == "fit":
         out.sort(

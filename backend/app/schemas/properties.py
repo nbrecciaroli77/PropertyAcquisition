@@ -76,6 +76,7 @@ class EvaluationOut(Strict):
     gates: list[dict[str, Any]]
     components: list[dict[str, Any]]
     computed_at: datetime
+    land: dict[str, Any] | None = None
 
 
 class WaiverOut(Strict):

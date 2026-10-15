@@ -90,6 +90,27 @@ class Weights(Strict):
 
 DEFAULT_WEIGHTS = Weights()
 
+LandSubtype = Literal["vacant_land", "house_and_land"]
+
+
+class LandFeasibilityBrief(Strict):
+    """LAND_FEASIBILITY_V1 configuration. Required values have no defaults: missing config fails closed."""
+
+    profile_version: Literal["LAND_FEASIBILITY_V1"] = "LAND_FEASIBILITY_V1"
+    land_price_cap_minor: int | None = None
+    min_usable_sqm: int | None = None
+    max_usable_sqm: int | None = None
+    preferred_drive_minutes: int | None = None
+    drive_origin_label: str | None = Field(default=None, max_length=120)
+    drive_origin_precision: Literal["approximate_suburb", "exact"] = "approximate_suburb"
+    priority_towns: list[Area] = Field(default_factory=list)
+    include_surrounds: bool = True
+    broader_region_label: str | None = Field(default=None, max_length=120)
+    long_drive_exceptions: list[str] = Field(default_factory=list)
+    subtypes: list[LandSubtype] = Field(default_factory=lambda: ["vacant_land", "house_and_land"])
+    completed_project_budget: Literal["inactive"] = "inactive"
+    airbnb: Literal["inactive"] = "inactive"
+
 
 class BriefPayload(Strict):
     schema_version: Literal[1] = 1
@@ -106,6 +127,7 @@ class BriefPayload(Strict):
     locations: Locations = Field(default_factory=Locations)
     policies: Policies = Field(default_factory=Policies)
     weights: Weights = Field(default_factory=Weights)
+    land_feasibility: LandFeasibilityBrief | None = None
 
 
 class FieldError(Strict):
@@ -126,8 +148,37 @@ def default_brief() -> BriefPayload:
     return BriefPayload()
 
 
-def validate_for_publish(brief: BriefPayload) -> list[FieldError]:
+def validate_land_config(brief: BriefPayload) -> list[FieldError]:
+    """CONFIG_PROFILE_INVALID blockers for LAND_FEASIBILITY_V1. Archived 250k/180 defaults are never substituted."""
+    land = brief.land_feasibility
+    if land is None:
+        return [FieldError(field="land_feasibility", message="Land feasibility configuration is missing.")]
+    errors: list[FieldError] = []
+    required = {
+        "land_price_cap_minor": "Enter the land purchase price cap.",
+        "min_usable_sqm": "Enter the minimum usable land area.",
+        "preferred_drive_minutes": "Enter the preferred driving time (a soft preference).",
+        "drive_origin_label": "Name the driving-time origin.",
+    }
+    for key, message in required.items():
+        value = getattr(land, key)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            errors.append(FieldError(field=f"land_feasibility.{key}", message=message))
+        elif isinstance(value, int) and value <= 0:
+            errors.append(FieldError(field=f"land_feasibility.{key}", message="Enter a value above zero."))
+    if land.max_usable_sqm is not None and land.min_usable_sqm is not None and land.max_usable_sqm < land.min_usable_sqm:
+        errors.append(FieldError(field="land_feasibility.max_usable_sqm", message="Maximum cannot be below the minimum."))
+    if not land.priority_towns:
+        errors.append(FieldError(field="land_feasibility.priority_towns", message="Add at least one priority town."))
+    if not land.subtypes:
+        errors.append(FieldError(field="land_feasibility.subtypes", message="Choose at least one land opportunity type."))
+    return errors
+
+
+def validate_for_publish(brief: BriefPayload, campaign_kind: str = "house") -> list[FieldError]:
     """Field-linked publication blockers. Unknown and Disabled criteria never block."""
+    if campaign_kind == "land":
+        return validate_land_config(brief)
     errors: list[FieldError] = []
     b = brief.budget
 

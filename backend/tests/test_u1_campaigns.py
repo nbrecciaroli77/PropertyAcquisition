@@ -238,19 +238,20 @@ async def test_unsupported_and_mismatched_profiles_fail_closed(client: AsyncClie
     assert (await client.put("/api/campaign-defaults", json={"settings": {"assessment_profile": "HOUSE_V1"}, "expected_version": 0, "reason": "house default"})).status_code == 200
     land_profile = (await client.get(f"/api/journeys/{land}/campaign")).json()["settings"]["assessment_profile"]
     assert land_profile["source"] == "system_default" and land_profile["requested"] == "LAND_FEASIBILITY_V1"
+    # U2: the land profile is implemented but stays unavailable until its required configuration is published.
     assert land_profile["effective"] is None and land_profile["state"] == "unavailable"
+    assert land_profile["config_state"] == "CONFIG_PROFILE_INVALID"
     journeys = {j["id"]: j for j in (await client.get("/api/journeys")).json()}
     assert journeys[house]["assessment_available"] is True and journeys[land]["assessment_available"] is False
     brief = (await client.get(f"/api/journeys/{land}/brief")).json()
     draft = brief["draft"]
     draft["locations"]["states"] = ["WA"]
-    draft["locations"]["included"] = [{"suburb": "Example Park", "state": "WA", "postcode": None}]
     draft["budget"]["ceiling_minor"] = 20_000_000
     draft["land_sqm"]["min"] = 400
     saved = await client.put(f"/api/journeys/{land}/brief/draft", json={"payload": draft, "expected_row_version": brief["journey"]["row_version"]})
-    published = await client.post(f"/api/journeys/{land}/brief/publish", json={"reason": "Synthetic land brief", "expected_row_version": saved.json()["journey"]["row_version"]})
-    assert published.status_code == 201, published.text
-    assert published.json()["current_version"]["reevaluation_state"] == "skipped_profile_unavailable"
+    published = await client.post(f"/api/journeys/{land}/brief/publish", json={"reason": "House-shaped values only", "expected_row_version": saved.json()["journey"]["row_version"]})
+    assert published.status_code == 422, "house-shaped values never satisfy the land profile"
+    assert {e["field"] for e in published.json()["detail"]["errors"]} >= {"land_feasibility.land_price_cap_minor", "land_feasibility.min_usable_sqm"}
     created = (await client.post(f"/api/journeys/{land}/intake", json=_structured("3 Synthetic Lot Lane"))).json()
     assert created["state"] == "completed"
     async with get_sessionmaker()() as db:

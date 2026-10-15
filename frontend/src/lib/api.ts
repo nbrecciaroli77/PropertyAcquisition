@@ -246,6 +246,27 @@ export interface BriefPayload {
     location_enabled: boolean;
     condition_enabled: boolean;
   };
+  land_feasibility?: LandFeasibilityBrief | null;
+}
+
+export type LandSubtype = "vacant_land" | "house_and_land";
+
+/** LAND_FEASIBILITY_V1 configuration. Required values have no defaults; missing values block publication. */
+export interface LandFeasibilityBrief {
+  profile_version: "LAND_FEASIBILITY_V1";
+  land_price_cap_minor: number | null;
+  min_usable_sqm: number | null;
+  max_usable_sqm: number | null;
+  preferred_drive_minutes: number | null;
+  drive_origin_label: string | null;
+  drive_origin_precision: "approximate_suburb" | "exact";
+  priority_towns: Area[];
+  include_surrounds: boolean;
+  broader_region_label: string | null;
+  long_drive_exceptions: string[];
+  subtypes: LandSubtype[];
+  completed_project_budget: "inactive";
+  airbnb: "inactive";
 }
 
 export type CampaignKind = "house" | "land";

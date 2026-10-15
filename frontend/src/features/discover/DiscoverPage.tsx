@@ -12,7 +12,7 @@ import { LoadDemoButton } from "../properties/LoadDemoButton";
 type GateFilter = "all" | "pass" | "unknown" | "fail";
 const filters: GateFilter[] = ["all", "pass", "unknown", "fail"];
 const filterLabel: Record<GateFilter, string> = { all: "All", pass: "Gates pass", unknown: "Verification required", fail: "Known failure" };
-type Sort = "checked" | "fit" | "address";
+type Sort = "checked" | "fit" | "address" | "priority";
 
 export default function DiscoverPage() {
   const [gate, setGate] = useState<GateFilter>("all");
@@ -74,7 +74,11 @@ export default function DiscoverPage() {
           <span className="sr-only">Sort</span>
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} data-testid="discover-sort" className="h-9 rounded-md border border-border bg-surface px-2 text-sm">
             <option value="checked">Last checked</option>
-            <option value="fit">Assessed fit</option>
+            {journey?.campaign_kind === "land" ? (
+              <option value="priority">Research priority</option>
+            ) : (
+              <option value="fit">Assessed fit</option>
+            )}
             <option value="address">Address</option>
           </select>
         </label>

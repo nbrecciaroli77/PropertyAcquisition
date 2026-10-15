@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, Skeleton } from "../../components/States";
 import { StatusChip, buyerTone, marketTone } from "../../components/StatusChip";
 import { formatDate, triText } from "../../lib/format";
 import { buyerLabel, factText, factTri, humanise, marketLabel, priceKindLabel } from "../../lib/properties";
+import { LandAssessment } from "./LandAssessment";
 import { MatchEvidence } from "./MatchEvidence";
 import { Activity, Notes, Tasks } from "./NotesTasksActivity";
 import { InspectionFeedback, Workflow } from "./Workflow";
@@ -147,7 +148,11 @@ export default function PropertyDetailPage() {
               <Tasks p={p} busy={busy} mutate={mutate} />
             </>
           ) : (
-            <MatchEvidence p={p} busy={busy} mutate={mutate} />
+            p.evaluation?.land ? (
+              <LandAssessment land={p.evaluation.land} gates={p.evaluation.gates} />
+            ) : (
+              <MatchEvidence p={p} busy={busy} mutate={mutate} />
+            )
           )}
         </div>
 

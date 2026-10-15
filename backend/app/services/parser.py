@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from app.core.money import aud_to_minor
+
 PARSER_VERSION = "1.0"
 
 # Australian states / territories
@@ -181,15 +183,7 @@ def _clean(s: str) -> str:
 
 def _parse_money_str(text: str) -> int | None:
     """Convert price string fragment to minor units (cents).  Returns None on failure."""
-    t = text.strip().lstrip("$").replace(",", "").lower()
-    try:
-        if t.endswith("m"):
-            return round(float(t[:-1]) * 1_000_000 * 100)
-        if t.endswith("k"):
-            return round(float(t[:-1]) * 1_000 * 100)
-        return round(float(t) * 100)
-    except (ValueError, OverflowError):
-        return None
+    return aud_to_minor(text)
 
 
 def _area_to_sqm(value_str: str, unit: str) -> int | None:

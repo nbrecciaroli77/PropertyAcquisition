@@ -23,7 +23,7 @@ export function CampaignsSection() {
                 <span className="block truncate font-semibold">{j.name}</span>
                 <span className="block text-xs text-muted">
                   {campaignKindLabel(j.campaign_kind)} · {j.campaign_enabled ? "enabled" : "paused"}
-                  {j.assessment_available ? "" : " · assessment not yet available (U2)"}
+                  {j.assessment_available ? "" : " · assessment unavailable (configuration required)"}
                 </span>
               </span>
             </span>

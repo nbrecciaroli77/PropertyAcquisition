@@ -16,6 +16,9 @@ class Strict(BaseModel):
 # ── Sub-objects ──────────────────────────────────────────────────────────────
 
 
+EvidenceStatus = Literal["supported", "unsuitable", "inconclusive"]
+
+
 class FactsIn(Strict):
     """Optional property facts supplied by the user.  Omitted fields stay Unknown."""
 
@@ -30,6 +33,25 @@ class FactsIn(Strict):
     detached: bool | None = None
     condition: Literal["move_in_ready", "usable_home", "renovation"] | None = None
     location_tier: Literal["primary", "strong_alternative", "conditional"] | None = None
+    # LAND_FEASIBILITY_V1 evidence (U2). Each stays Unknown unless supplied.
+    land_subtype: Literal["vacant_land", "house_and_land"] | None = None
+    usable_sqm: int | None = Field(default=None, ge=0)
+    land_price_minor: int | None = Field(default=None, ge=0)
+    seller_ceiling: Literal["confirmed", "unverified"] | None = None
+    drive_minutes: int | None = Field(default=None, ge=0, le=2000)
+    availability: Literal["available", "under_offer", "sold", "withdrawn"] | None = None
+    dwelling_pathway: Literal["documented", "unsuitable", "inconclusive"] | None = None
+    shed_present: bool | None = None
+    title_covenants: EvidenceStatus | None = None
+    legal_access: EvidenceStatus | None = None
+    zoning_dwelling: EvidenceStatus | None = None
+    building_envelope: EvidenceStatus | None = None
+    bushfire: EvidenceStatus | None = None
+    flood_wetlands: EvidenceStatus | None = None
+    power: EvidenceStatus | None = None
+    water: EvidenceStatus | None = None
+    wastewater: EvidenceStatus | None = None
+    modular_feasibility: EvidenceStatus | None = None
 
 
 class PriceIn(Strict):

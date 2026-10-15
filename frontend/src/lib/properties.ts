@@ -66,6 +66,49 @@ export interface EvaluationOut {
   gates: GateOut[];
   components: ComponentOut[];
   computed_at: string;
+  land?: LandAssessment | null;
+}
+
+export interface LandGap {
+  criterion: string;
+  label: string;
+  reason: string;
+}
+
+/** LAND_FEASIBILITY_V1 result: ordinal research priority with explained gaps; never a score out of 100. */
+export interface LandAssessment {
+  status: "SUPPORTED" | "PROVISIONAL" | "EXCLUDED";
+  priority: 1 | 2 | null;
+  explanation: string;
+  price: {
+    advertised_minor: number | null;
+    advertised_upper_minor: number | null;
+    advertised_raw: string;
+    price_kind: string;
+    subtype: string | null;
+    land_component_minor: number | null;
+    seller_ceiling: string;
+    supported_land_price_minor: number | null;
+    basis: string | null;
+    verification: string | null;
+  };
+  area: { usable_sqm: number | null; total_sqm: number | null; min_usable_sqm: number; max_usable_sqm: number | null };
+  travel: {
+    preferred_minutes: number;
+    minutes: number | null;
+    state: "met" | "missed" | "unknown";
+    long_drive_exception: boolean;
+    origin: string | null;
+    origin_precision: string;
+    note: string;
+    source_label: string;
+  };
+  location: { suburb: string; tier: string; broader_region: string | null };
+  checks: GateOut[];
+  failures: { criterion: string; code: string; reason: string }[];
+  gaps: LandGap[];
+  shed_note: string | null;
+  inactive: Record<string, string>;
 }
 
 export interface PropertySummary {

@@ -168,7 +168,11 @@ Pre-flight
    `select id, journey_id, idempotency_key from report_runs` (4 rows today) and `count(*)` of `notification_events`.
 
 Deploy, in this order (rehearsed: the current production code runs unchanged on the U1 schema)
-4. `cd backend && DATABASE_URL=<live> alembic upgrade d4e1f7a2b9c3`. It is one revision with transactional DDL; it only adds columns, tables and constraints.
+4. From a trusted operator shell, not the preview pod's configuration, with both values passed to that one process only:
+   `cd backend && DATABASE_TARGET=live DATABASE_URL=<live> alembic upgrade d4e1f7a2b9c3`. Since the U1 closeout guard,
+   Alembic refuses to run unless `DATABASE_TARGET` matches the URL. Never put `DATABASE_TARGET=live` in the preview's
+   `backend/.env` or supervisor config. It is one revision with transactional DDL; it only adds columns, tables and
+   constraints. (Corrected during U2; if U2 is also approved, see `U2-report.md` §8 for its follow-on revision.)
 5. Verify: `alembic current` = `d4e1f7a2b9c3`; the same report IDs and keys, all `workspace_legacy` and mapped; every journey `house` and enabled.
 6. Set the production configuration on its own, in the Emergent deployment secrets, never in the preview's
    `backend/.env`: `DATABASE_TARGET=live` plus the live `DATABASE_URL`. Without `DATABASE_TARGET=live` the U1 build

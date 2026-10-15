@@ -25,6 +25,7 @@ from app.db.models import (
     DiscoveryEvent,
     Fact,
     IntakeEvent,
+    LAND_FACT_KEYS,
     Journey,
     ListingCampaign,
     Observation,
@@ -115,6 +116,17 @@ def _facts_to_db(
     rows.append(_bool("detached", facts.detached))
     rows.append(_text("condition", facts.condition))
     rows.append(_text("location_tier", facts.location_tier))
+    # Land evidence rows are written only when supplied, so house properties (and their hashes) are unchanged.
+    for key in LAND_FACT_KEYS:
+        value = getattr(facts, key)
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            rows.append(_bool(key, value))
+        elif isinstance(value, int):
+            rows.append(_int(key, value))
+        else:
+            rows.append(_text(key, value))
 
     campaign: ListingCampaign | None = None
     if price is not None:

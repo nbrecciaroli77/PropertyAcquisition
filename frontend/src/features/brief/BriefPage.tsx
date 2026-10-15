@@ -17,6 +17,7 @@ import {
 import { formatDate } from "../../lib/format";
 import { dollarsToMinor, formatMinor, minorToDollars } from "../../lib/money";
 import { CriterionCard } from "./CriterionCard";
+import { LandBriefEditor } from "./LandBriefEditor";
 import { WeightsEditor } from "./WeightsEditor";
 import { errorLookup, useBrief } from "./useBrief";
 
@@ -167,6 +168,9 @@ export default function BriefPage() {
         </FormNotice>
       )}
 
+      {data.journey.campaign_kind === "land" ? (
+        <LandBriefEditor draft={draft} setDraft={brief.setDraft} errorFor={errorFor} />
+      ) : (
       <div className="mt-4 grid gap-5 lg:grid-cols-2">
         <CriterionCard
           id="budget"
@@ -440,6 +444,7 @@ export default function BriefPage() {
           }
         />
       </div>
+      )}
 
       <section aria-labelledby="publish-heading" className="card mt-6 max-w-[760px] p-5" data-testid="publish-panel">
         <h2 id="publish-heading" className="text-h3 font-semibold">

@@ -19,7 +19,7 @@ export const pathAfterSwitch = (pathname: string): string =>
 const statusLine = (j: Journey): string => {
   if (j.status === "archived") return "Archived";
   if (!j.campaign_enabled) return "Paused · intake and production reports blocked";
-  return j.assessment_available ? "Assessment available" : "Assessment not yet available (U2)";
+  return j.assessment_available ? "Assessment available" : "Assessment unavailable — configuration required";
 };
 
 export function CampaignSwitcher() {

@@ -38,7 +38,7 @@ export default function CampaignSettingsPage() {
           <CampaignKindIcon kind={active.campaign_kind} className="h-3 w-3" /> {campaignKindLabel(active.campaign_kind)} campaign
         </StatusChip>
         <StatusChip tone={active.assessment_available ? "pass" : "warning"} hideIcon data-testid="campaign-assessment-chip">
-          {active.assessment_available ? "Assessment available" : "Assessment: not yet available — planned for U2"}
+          {active.assessment_available ? "Assessment available" : "Assessment unavailable — publish the required profile configuration"}
         </StatusChip>
       </div>
       {error && <ErrorState title="Campaign settings could not be loaded" description={error} data-testid="campaign-settings-error" />}

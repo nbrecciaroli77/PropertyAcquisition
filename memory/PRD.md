@@ -405,3 +405,11 @@ Next: owner reviews U1 → Save to GitHub (commit SHA) → decides on the §10 l
 - Replaced the self-comparing house weekly duplicates assertion with `{"detected": 1, "resolved": 0}`.
 - Added the failure register (§13) to `docs/uplift/U1-report.md`, with evidence from a baseline re-run at `32bf41d`.
 - Focused tests: 29 passed. No live changes, no deploy, no U2. Awaiting owner review.
+
+## IDEA-010 uplift v2.0 — U2 land feasibility (16 October 2026)
+Baseline was the U1 closeout `cf82f7d`. Full report: `docs/uplift/U2-report.md`.
+- `LAND_FEASIBILITY_V1` (`services/land.py`, `land_feasibility_v1`): ordinal priorities (Priority 1 / Priority 2 / Excluded), no score out of 100. Only documented failures exclude. Price, area, travel and evidence are kept distinct; tie-breaks are deterministic.
+- The land brief config (`LandFeasibilityBrief`) has no defaults. The profile is available only when the published brief is valid; otherwise `CONFIG_PROFILE_INVALID`.
+- Migration `e7b2a9c4f1d6` adds the land fact keys. Rehearsed on the throwaway DB; the downgrade fails closed. **Not applied live.**
+- House rules and stored scores are unchanged (21/21 identical). Exact Decimal money conversion. The UI covers the brief editor, the land assessment on property detail and priority ordering.
+- Tests: 133 backend passed, 11 Jest passed; typecheck and build pass. Not deployed. U3 not started. Awaiting owner review.

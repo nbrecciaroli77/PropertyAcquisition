@@ -11,6 +11,7 @@ from app.db.models import BriefVersion, Journey, User
 from app.schemas.brief import (
     DEFAULT_WEIGHTS,
     BriefPayload,
+    LandFeasibilityBrief,
     default_brief,
     enabled_weight_total,
     validate_for_publish,
@@ -104,6 +105,14 @@ async def list_journeys(
     return [await _journey_out(db, j) for j in rows]
 
 
+def _initial_draft(campaign_kind: str) -> dict:
+    brief = default_brief()
+    if campaign_kind == "land":
+        # Empty on purpose: required land values must be entered explicitly (no archived defaults).
+        brief.land_feasibility = LandFeasibilityBrief()
+    return brief.model_dump()
+
+
 @router.post("", response_model=JourneyOut, status_code=status.HTTP_201_CREATED)
 async def create_journey(
     body: JourneyCreate, auth: AuthContext = Depends(get_auth), db: AsyncSession = Depends(get_db)
@@ -114,7 +123,7 @@ async def create_journey(
         name=body.name.strip(),
         timezone=body.timezone,
         campaign_kind=body.campaign_kind,
-        draft_payload=default_brief().model_dump(),
+        draft_payload=_initial_draft(body.campaign_kind),
         created_by=auth.user.id,
     )
     db.add(journey)
@@ -187,7 +196,7 @@ async def get_brief(
         journey=await _journey_out(db, journey),
         draft=draft,
         draft_updated_at=journey.draft_updated_at,
-        validation=validate_for_publish(draft),
+        validation=validate_for_publish(draft, journey.campaign_kind),
         current_version=await _version_out(db, current) if current else None,
         weight_total_enabled=enabled_weight_total(draft.weights),
     )
@@ -241,7 +250,7 @@ async def publish_brief(
     _check_row_version(journey, body.expected_row_version)
     draft = BriefPayload.model_validate(journey.draft_payload)
 
-    errors = validate_for_publish(draft)
+    errors = validate_for_publish(draft, journey.campaign_kind)
     if errors:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

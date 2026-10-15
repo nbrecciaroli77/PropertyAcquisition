@@ -25,6 +25,7 @@ from app.db.models import (
     Property,
 )
 from app.schemas.brief import BriefPayload
+from app.services.land import LAND_ENGINE_VERSION, evaluate_land
 from app.services.matching import EVALUATION_VERSION, FactValue, PriceInput, PropertyInput, evaluate
 
 FIXTURE_PATH = Path(__file__).resolve().parents[3] / "fixtures" / "demo-data.json"
@@ -307,7 +308,10 @@ async def build_input(db: AsyncSession, prop: Property) -> PropertyInput:
 async def evaluate_property(db: AsyncSession, prop: Property, version: BriefVersion) -> MatchEvaluation:
     """Deterministic: same brief version + same facts produce the same stored result."""
     brief = BriefPayload.model_validate(version.payload)
-    result = evaluate(brief, await build_input(db, prop), version.version_no)
+    journey = await db.get(Journey, prop.journey_id)
+    is_land = journey is not None and journey.campaign_kind == "land"
+    evaluator = evaluate_land if is_land else evaluate
+    result = evaluator(brief, await build_input(db, prop), version.version_no)
     existing = (
         await db.execute(
             select(MatchEvaluation).where(
@@ -321,7 +325,7 @@ async def evaluate_property(db: AsyncSession, prop: Property, version: BriefVers
             journey_id=prop.journey_id,
             property_id=prop.id,
             brief_version_id=version.id,
-            evaluation_version=EVALUATION_VERSION,
+            evaluation_version=result["evaluation_version"],
             input_hash=result["input_hash"],
             verdict=result["verdict"],
             fit_pct=result["fit"]["pct"],
@@ -331,6 +335,7 @@ async def evaluate_property(db: AsyncSession, prop: Property, version: BriefVers
         db.add(existing)
     elif existing.input_hash != result["input_hash"]:
         existing.input_hash = result["input_hash"]
+        existing.evaluation_version = result["evaluation_version"]
         existing.verdict = result["verdict"]
         existing.fit_pct = result["fit"]["pct"]
         existing.coverage_pct = result["coverage"]["pct"] or 0
@@ -371,7 +376,10 @@ async def reevaluate_journey(
             journey_id=journey.id,
             kind="reevaluation",
             summary=f"Re-evaluated {len(props)} properties against brief version {version.version_no}",
-            detail={"brief_version_no": version.version_no, "evaluation_version": EVALUATION_VERSION},
+            detail={
+                "brief_version_no": version.version_no,
+                "evaluation_version": LAND_ENGINE_VERSION if journey.campaign_kind == "land" else EVALUATION_VERSION,
+            },
             actor_user_id=actor_id,
         )
     )

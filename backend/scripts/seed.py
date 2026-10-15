@@ -30,7 +30,7 @@ from app.db.models import (  # noqa: E402
     User,
     Workspace,
 )
-from app.schemas.brief import Area, BriefPayload, default_brief  # noqa: E402
+from app.schemas.brief import Area, BriefPayload, LandFeasibilityBrief, default_brief  # noqa: E402
 from app.schemas.intake import FactsIn, IntakeRequest, PriceIn, StructuredPayload  # noqa: E402
 from app.services.intake import process_intake  # noqa: E402
 from app.services.properties import load_demo_properties, reevaluate_journey  # noqa: E402
@@ -462,23 +462,60 @@ async def _seed_demo_notifications(db: AsyncSession, workspace_id: object, journ
     )
 
 
+_SUPPORTED_GATES = {
+    "availability": "available", "title_covenants": "supported", "legal_access": "supported",
+    "zoning_dwelling": "supported", "dwelling_pathway": "documented",
+}
 SYNTHETIC_LAND_LISTINGS = [
-    # Synthetic only. The first address deliberately repeats a house-campaign fixture address to
-    # demonstrate that the same address is an independent record in each buyer campaign.
-    {"address_line": "12 Banksia Crescent", "suburb": "Example Park", "state": "WA", "land_sqm": 612, "raw_price": "$189,000"},
-    {"address_line": "Lot 7 Example Ridge Road", "suburb": "Example Coast", "state": "WA", "land_sqm": 1450, "raw_price": "Offers over $175,000"},
+    # Synthetic only. Street names are invented; towns follow the land brief. The first address repeats a
+    # house-campaign fixture address to show the same address is an independent record per campaign.
+    {"address_line": "12 Banksia Crescent", "suburb": "Example Park", "raw_price": "$230,000", "kind": "exact", "amount": 230_000_00,
+     "facts": {"land_sqm": 612, "drive_minutes": 170}},
+    {"address_line": "Lot 7 Example Ridge Road", "suburb": "Nannup", "raw_price": "Offers over $175,000", "kind": "offers_over", "amount": 175_000_00,
+     "facts": {"land_sqm": 1450, "land_subtype": "vacant_land", "availability": "available", "drive_minutes": 230}},
+    {"address_line": "Lot 12 Synthetic Road", "suburb": "Harvey", "raw_price": "$189,000", "kind": "exact", "amount": 189_000_00,
+     "facts": {"land_sqm": 800, "usable_sqm": 600, "land_subtype": "vacant_land", "drive_minutes": 150, "power": "supported",
+               "water": "supported", **_SUPPORTED_GATES}},
+    {"address_line": "Lot 3 Sample Track", "suburb": "Mount Barker", "raw_price": "$165,000", "kind": "exact", "amount": 165_000_00,
+     "facts": {"land_sqm": 2000, "usable_sqm": 900, "land_subtype": "vacant_land", "land_price_minor": 165_000_00,
+               "drive_minutes": 300, **_SUPPORTED_GATES}},
+    {"address_line": "Lot 21 Placeholder Lane", "suburb": "Capel", "raw_price": "$149,000", "kind": "exact", "amount": 149_000_00,
+     "facts": {"land_sqm": 700, "usable_sqm": 500, "land_subtype": "vacant_land", "availability": "available",
+               "shed_present": True, "drive_minutes": 160}},
+    {"address_line": "Lot 9 Synthetic Way", "suburb": "Manjimup", "raw_price": "$120,000", "kind": "exact", "amount": 120_000_00,
+     "facts": {"land_sqm": 900, "usable_sqm": 800, "land_subtype": "vacant_land", "availability": "available",
+               "title_covenants": "unsuitable", "drive_minutes": 250}},
 ]
+LAND_PRIORITY_TOWNS = ("Harvey", "Bunbury", "Capel", "Busselton", "Manjimup", "Mount Barker", "Margaret River", "Nannup")
+
+
+def _land_brief() -> BriefPayload:
+    """Synthetic Down South Land settings: AUD200,000 inclusive cap, 250 m² usable minimum, ~240 min soft drive."""
+    brief = default_brief()
+    brief.land_feasibility = LandFeasibilityBrief(
+        land_price_cap_minor=200_000_00,
+        min_usable_sqm=250,
+        max_usable_sqm=None,
+        preferred_drive_minutes=240,
+        drive_origin_label="Home suburb (synthetic, approximate)",
+        drive_origin_precision="approximate_suburb",
+        priority_towns=[Area(suburb=t, state="WA") for t in LAND_PRIORITY_TOWNS],
+        include_surrounds=True,
+        broader_region_label="Mandurah and south",
+        long_drive_exceptions=["Mount Barker"],
+    )
+    return brief
 
 
 async def _seed_land_campaign(db: AsyncSession, workspace_id: object, user: User) -> None:
-    """Second buyer campaign in the demo workspace (U1). Land assessment itself is U2."""
+    """Second buyer campaign in the demo workspace with an explicitly published LAND_FEASIBILITY_V1 brief."""
     land = (
         await db.execute(select(Journey).where(Journey.workspace_id == workspace_id, Journey.campaign_kind == "land"))
     ).scalars().first()
     if land is None:
         land = Journey(
             workspace_id=workspace_id, name="Synthetic down-south land", status="active", onboarding_step=6,
-            onboarding_completed_at=now_utc(), campaign_kind="land", draft_payload=default_brief().model_dump(),
+            onboarding_completed_at=now_utc(), campaign_kind="land", draft_payload=_land_brief().model_dump(),
             created_by=user.id,
         )
         db.add(land)
@@ -491,16 +528,29 @@ async def _seed_land_campaign(db: AsyncSession, workspace_id: object, user: User
             )
         )
         await db.flush()
+    if land.current_version_id is None:
+        version = BriefVersion(
+            workspace_id=workspace_id, journey_id=land.id, version_no=1, payload=_land_brief().model_dump(),
+            reason="Seeded synthetic Down South Land brief (U2)", actor_user_id=user.id,
+        )
+        db.add(version)
+        await db.flush()
+        land.current_version_id = version.id
+        land.draft_payload = version.payload
+        await db.flush()
     for listing in SYNTHETIC_LAND_LISTINGS:
         await process_intake(
             db, land, user.id,
             IntakeRequest(
                 mode="structured_form",
                 structured=StructuredPayload(
-                    address_line=listing["address_line"], suburb=listing["suburb"], state=listing["state"],
-                    facts=FactsIn(land_sqm=listing["land_sqm"], property_type="land"),
-                    price=PriceIn(price_kind="offers_over" if "Offers" in listing["raw_price"] else "exact", raw_price=listing["raw_price"]),
-                    notes="Synthetic land listing for campaign-isolation demonstration.",
+                    address_line=listing["address_line"], suburb=listing["suburb"], state="WA",
+                    facts=FactsIn(property_type="land", **listing["facts"]),
+                    price=PriceIn(
+                        price_kind=listing["kind"], raw_price=listing["raw_price"],
+                        lower_minor=listing["amount"], upper_minor=listing["amount"] if listing["kind"] == "exact" else None,
+                    ),
+                    notes="Synthetic land listing (U2 feasibility demonstration).",
                 ),
             ),
         )
@@ -596,7 +646,7 @@ async def _seed_account(db: AsyncSession, spec: dict) -> None:
             await db.execute(select(BriefVersion).where(BriefVersion.id == journey.current_version_id))
         ).scalar_one_or_none()
         target = _seed_brief().model_dump()
-        if current is None or current.payload != target:
+        if current is None or BriefPayload.model_validate(current.payload).model_dump() != target:
             next_no = (
                 int(
                     (

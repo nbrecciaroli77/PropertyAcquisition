@@ -5,10 +5,13 @@ import { EmptyState, ErrorState, Skeleton } from "../../components/States";
 import { StatusChip, marketTone } from "../../components/StatusChip";
 import { ButtonLink } from "../../components/Button";
 import { BUYER_STATES, marketLabel, verdictText } from "../../lib/properties";
+import { useJourneys } from "../../lib/journey";
+import { evaluationChip } from "../../lib/land";
 import { useProperties } from "../properties/hooks";
 
 export default function PipelinePage() {
-  const { status, items, message, reload } = useProperties();
+  const { active } = useJourneys();
+  const { status, items, message, reload } = useProperties(active?.campaign_kind === "land" ? { sort: "priority" } : {});
   return (
     <>
       <PageHeader
@@ -64,7 +67,7 @@ export default function PipelinePage() {
                               Market: {marketLabel(p.campaign?.market_state)}
                             </StatusChip>
                             <StatusChip tone={p.evaluation?.verdict === "pass" ? "pass" : p.evaluation?.verdict === "fail" ? "fail" : "unknown"} hideIcon>
-                              {p.evaluation ? verdictText(p.evaluation.verdict) : "Not evaluated"}
+                              {evaluationChip(p.evaluation, verdictText)}
                             </StatusChip>
                           </div>
                         </li>

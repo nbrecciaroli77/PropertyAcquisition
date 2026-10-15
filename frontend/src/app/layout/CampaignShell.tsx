@@ -27,8 +27,9 @@ export function CampaignNotice() {
         <div role="note" className="flex items-start gap-2 border-b border-navy/15 bg-navy-soft px-4 py-2 text-xs text-navy md:px-6 lg:px-8" data-testid="campaign-assessment-unavailable">
           <LandPlot className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>
-            <strong className="font-semibold">Land assessment: not yet available — planned for U2.</strong> Properties in
-            this campaign keep their evidence but are not assessed. House rules, gates and fit scores are never applied.{" "}
+            <strong className="font-semibold">Assessment unavailable: the required profile configuration is missing or invalid.</strong>{" "}
+            Properties keep their evidence but are not assessed, and archived defaults or house rules are never substituted. Publish the
+            land brief to enable it.{" "}
             <Link to="/app/campaign" className="font-semibold underline underline-offset-2" data-testid="campaign-notice-settings-link">
               Campaign settings
             </Link>

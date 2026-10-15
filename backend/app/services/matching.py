@@ -526,7 +526,8 @@ def score_preferences(
 
 def input_hash(brief: BriefPayload, p: PropertyInput) -> str:
     payload = {
-        "brief": brief.model_dump(),
+        # House evaluations never read land configuration; excluding it keeps historical hashes stable.
+        "brief": brief.model_dump(exclude={"land_feasibility"}),
         "property": {
             "suburb": p.suburb,
             "state": p.state,

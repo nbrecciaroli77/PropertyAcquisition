@@ -70,7 +70,7 @@ def test_alembic_refuses_remote_url_under_disposable_target() -> None:
 
 def test_revision_evaluation() -> None:
     head = expected_revision()
-    assert head == "d4e1f7a2b9c3"
+    assert head == "e7b2a9c4f1d6"
     assert evaluate_revisions([head], head).ok
     assert evaluate_revisions(["c8d5e2f9a4b1"], head).reason == "schema_incompatible"
     assert evaluate_revisions([], head).reason == "schema_missing"

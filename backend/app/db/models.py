@@ -254,6 +254,31 @@ FACT_KEYS = (
     "condition",
     "location_tier",
 )
+# LAND_FEASIBILITY_V1 evidence (U2). Written only when supplied, so house properties are unaffected.
+LAND_EVIDENCE_KEYS = (
+    "title_covenants",
+    "legal_access",
+    "zoning_dwelling",
+    "building_envelope",
+    "bushfire",
+    "flood_wetlands",
+    "power",
+    "water",
+    "wastewater",
+    "modular_feasibility",
+)
+LAND_FACT_KEYS = (
+    "land_subtype",
+    "usable_sqm",
+    "land_price_minor",
+    "seller_ceiling",
+    "drive_minutes",
+    "availability",
+    "dwelling_pathway",
+    "shed_present",
+    *LAND_EVIDENCE_KEYS,
+)
+FACT_KEYS = FACT_KEYS + LAND_FACT_KEYS
 VALUE_STATES = ("known", "unknown", "not_applicable", "conflict")
 SOURCE_KINDS = ("original_source", "partial", "manual", "conflict")
 

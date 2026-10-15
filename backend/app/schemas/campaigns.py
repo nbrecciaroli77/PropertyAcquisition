@@ -93,6 +93,8 @@ class EffectiveSettingOut(BaseModel):
     state: str
     note: str | None = None
     effective_label: str | None = None
+    config_state: str | None = None
+    config_errors: list[str] = []
 
 
 class ScheduleSyncOut(Strict):
